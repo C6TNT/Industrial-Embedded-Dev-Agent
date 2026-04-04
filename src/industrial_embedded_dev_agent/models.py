@@ -26,3 +26,23 @@ class DatasetOverview:
     benchmark_by_type: dict[str, int]
     taxonomy_groups: dict[str, int]
     material_counts: dict[str, int]
+
+
+@dataclass(frozen=True)
+class SearchHit:
+    source_id: str
+    source_type: str
+    title: str
+    content: str
+    score: float
+
+
+@dataclass(frozen=True)
+class StructuredDiagnosis:
+    summary: str
+    issue_category: str
+    cause_labels: list[str]
+    action_labels: list[str]
+    risk_level: str
+    should_refuse: bool
+    evidence: list[str]

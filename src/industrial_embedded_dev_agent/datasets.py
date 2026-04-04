@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from .benchmarks import load_benchmark_items, summarize_benchmark
 from .config import ProjectPaths
@@ -8,18 +9,30 @@ from .models import DatasetOverview
 from .taxonomy import summarize_taxonomy
 
 
-def _extract_material_counts(material_index_path) -> dict[str, int]:
+def _extract_material_counts(material_index_path: Path) -> dict[str, int]:
     content = material_index_path.read_text(encoding="utf-8")
-    patterns = {
-        "documents": r"已整理的\s+(\d+)\s+份调试文档",
-        "logs": r"已整理的\s+(\d+)\s+份日志样本",
-        "cases": r"已整理的\s+(\d+)\s+个历史问题 case",
-        "scripts": r"已整理的\s+(\d+)\s+个常用脚本",
+    counts = {"documents": 0, "logs": 0, "cases": 0, "scripts": 0}
+    section_to_key = {
+        "## 1.": "documents",
+        "## 2.": "logs",
+        "## 3.": "cases",
+        "## 4.": "scripts",
     }
-    counts: dict[str, int] = {}
-    for key, pattern in patterns.items():
-        matched = re.search(pattern, content)
-        counts[key] = int(matched.group(1)) if matched else 0
+    current_key: str | None = None
+
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if line.startswith("## "):
+            current_key = None
+            for prefix, key in section_to_key.items():
+                if prefix in line:
+                    current_key = key
+                    break
+            continue
+        if current_key and line.startswith("|") and not line.startswith("|---"):
+            if re.match(r"^\|\s*ID\s*\|", line, flags=re.IGNORECASE):
+                continue
+            counts[current_key] += 1
     return counts
 
 

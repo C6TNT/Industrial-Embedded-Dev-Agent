@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import asdict
 from pathlib import Path
 
+from .analysis import analyze_text
 from .benchmarks import filter_benchmark_items, load_benchmark_items, summarize_benchmark
 from .config import get_project_paths
 from .datasets import build_dataset_overview
+from .retrieval import build_search_documents, search_documents
+from .runner import run_benchmark
 from .taxonomy import parse_taxonomy_labels, summarize_taxonomy
 
 
@@ -18,8 +22,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
     benchmark_parser = subparsers.add_parser("benchmark", help="Inspect benchmark assets")
     benchmark_subparsers = benchmark_parser.add_subparsers(dest="benchmark_command", required=True)
-
     benchmark_subparsers.add_parser("summary", help="Summarize benchmark items")
+
+    benchmark_run_parser = benchmark_subparsers.add_parser("run", help="Run the rule-based benchmark baseline")
+    benchmark_run_parser.add_argument("--type", dest="item_type", help="Filter benchmark run by item_type")
+    benchmark_run_parser.add_argument("--tag", help="Filter benchmark run by tag")
 
     benchmark_list_parser = benchmark_subparsers.add_parser("list", help="List benchmark items")
     benchmark_list_parser.add_argument("--type", dest="item_type", help="Filter by item_type")
@@ -36,6 +43,14 @@ def _build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Select which taxonomy group to print",
     )
+
+    search_parser = subparsers.add_parser("search", help="Search normalized project assets")
+    search_parser.add_argument("query", help="Search query text")
+    search_parser.add_argument("--limit", type=int, default=5, help="Maximum number of hits")
+
+    analyze_parser = subparsers.add_parser("analyze", help="Produce structured baseline analysis")
+    analyze_parser.add_argument("text", help="Input text to analyze")
+    analyze_parser.add_argument("--mode", choices=["auto", "general", "log", "safety"], default="auto")
     return parser
 
 
@@ -73,6 +88,10 @@ def main() -> None:
         if args.benchmark_command == "summary":
             _print_json(summarize_benchmark(items))
             return
+        if args.benchmark_command == "run":
+            filtered = filter_benchmark_items(items, item_type=args.item_type, tag=args.tag)
+            _print_json(run_benchmark(filtered))
+            return
         if args.benchmark_command == "list":
             filtered = filter_benchmark_items(items, item_type=args.item_type, tag=args.tag)
             _print_json(
@@ -98,6 +117,13 @@ def main() -> None:
             _print_json(groups[args.group])
             return
 
+    if args.command == "search":
+        documents = build_search_documents(paths.root)
+        hits = search_documents(documents, args.query, limit=args.limit)
+        _print_json([asdict(hit) for hit in hits])
+        return
 
-if __name__ == "__main__":
-    main()
+    if args.command == "analyze":
+        diagnosis = analyze_text(args.text, mode=args.mode)
+        _print_json(asdict(diagnosis))
+        return
