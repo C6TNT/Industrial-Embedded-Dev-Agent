@@ -1,0 +1,15 @@
+#ifndef MOTION_CONTROL_LIB_GLOBAL_H
+#define MOTION_CONTROL_LIB_GLOBAL_H
+
+#if __has_include(<QtCore/qglobal.h>)
+#include <QtCore/qglobal.h>
+#if defined(MOTION_CONTROL_LIB_LIBRARY)
+#define MOTION_CONTROL_LIBSHARED_EXPORT Q_DECL_EXPORT
+#else
+#define MOTION_CONTROL_LIBSHARED_EXPORT Q_DECL_IMPORT
+#endif
+#else
+#define MOTION_CONTROL_LIBSHARED_EXPORT
+#endif
+
+#endif // MOTION_CONTROL_LIB_GLOBAL_H

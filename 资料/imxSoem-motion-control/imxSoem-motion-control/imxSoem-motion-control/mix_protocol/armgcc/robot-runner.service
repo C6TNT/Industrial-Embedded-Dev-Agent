@@ -1,0 +1,14 @@
+[Unit]
+Description=Robot Runtime Launcher
+After=network.target multi-user.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/bin/sh /home/run_robot_remote.sh
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,786 @@
+/*
+ * Copyright (c) 2015, Freescale Semiconductor, Inc.
+ * Copyright 2016-2022 NXP
+ * All rights reserved.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+#include "fsl_debug_console.h"
+#include "fsl_flexcan.h"
+#include "pin_mux.h"
+#include "clock_config.h"
+#include "board.h"
+
+#include "fsl_gpio.h"
+/*******************************************************************************
+ * Definitions
+ ******************************************************************************/
+#define EXAMPLE_CAN FLEXCAN1
+#define EXAMPLE_CAN_CLK_FREQ                                                                    \
+    (CLOCK_GetPllFreq(kCLOCK_SystemPll1Ctrl) / (CLOCK_GetRootPreDivider(kCLOCK_RootFlexCan1)) / \
+     (CLOCK_GetRootPostDivider(kCLOCK_RootFlexCan1)))
+/* Set USE_IMPROVED_TIMING_CONFIG macro to use api to calculates the improved CAN / CAN FD timing values. */
+#define USE_IMPROVED_TIMING_CONFIG (1U)
+
+#define RX_MESSAGE_BUFFER_NUM (9)
+#define TX_MESSAGE_BUFFER_NUM (8)
+#define RPDO1_BASE_COB_ID (0x200U)
+#define SERVO_MODE_VELOCITY (0x03U)
+#define CTRL_WORD_SHUTDOWN (0x0006U)
+#define CTRL_WORD_SWITCH_ON (0x0007U)
+#define CTRL_WORD_ENABLE_OPERATION (0x000FU)
+#define STATUS_WORD_OPERATION_ENABLED_MASK (0x006FU)
+#define STATUS_WORD_OPERATION_ENABLED_VALUE (0x0027U)
+#define PDO_STARTUP_PERIOD_US (8000U)
+#define PDO_RUNTIME_FEEDBACK_CYCLES (125U)
+
+/* Fix MISRA_C-2012 Rule 17.7. */
+#define LOG_INFO (void)PRINTF
+#if (defined(USE_CANFD) && USE_CANFD)
+/*
+ *    DWORD_IN_MB    DLC    BYTES_IN_MB             Maximum MBs
+ *    2              8      kFLEXCAN_8BperMB        64
+ *    4              10     kFLEXCAN_16BperMB       42
+ *    8              13     kFLEXCAN_32BperMB       25
+ *    16             15     kFLEXCAN_64BperMB       14
+ *
+ * Dword in each message buffer, Length of data in bytes, Payload size must align,
+ * and the Message Buffers are limited corresponding to each payload configuration:
+ */
+#define DLC         (15)
+#define BYTES_IN_MB kFLEXCAN_64BperMB
+#else
+#define DLC (8)
+#endif
+/*******************************************************************************
+ * Prototypes
+ ******************************************************************************/
+
+/*******************************************************************************
+ * Variables
+ ******************************************************************************/
+flexcan_handle_t flexcanHandle;
+volatile bool txComplete = false;
+volatile bool rxComplete = false;
+volatile bool wakenUp    = false;
+flexcan_mb_transfer_t txXfer, rxXfer;
+#if (defined(USE_CANFD) && USE_CANFD)
+flexcan_fd_frame_t frame;
+#else
+flexcan_frame_t frame;
+#endif
+flexcan_rx_mb_config_t mbConfig;
+typedef struct {
+    struct
+    {
+        uint8_t  mode;   // 瀹搞儰缍斿Ο鈥崇础 (缁便垹绱?0x6060, 1 鐎涙濡?
+        uint16_t ctrl;   // 閹貉冨煑鐎?  (缁便垹绱?0x6040, 2 鐎涙濡?
+        int32_t speed;  // 閻╊喗鐖ｉ柅鐔峰 (缁便垹绱?0xFF60, 4 鐎涙濡?
+    };
+    union
+    {
+        struct
+        {
+            uint64_t data; /*!< CAN Frame data */
+        };
+        struct
+        {
+            uint8_t dataByte0; /*!< CAN Frame payload byte0. */
+            uint8_t dataByte1; /*!< CAN Frame payload byte1. */
+            uint8_t dataByte2; /*!< CAN Frame payload byte2. */
+            uint8_t dataByte3; /*!< CAN Frame payload byte3. */
+            uint8_t dataByte4; /*!< CAN Frame payload byte4. */
+            uint8_t dataByte5; /*!< CAN Frame payload byte5. */
+            uint8_t dataByte6; /*!< CAN Frame payload byte6. */
+            uint8_t dataByte7; /*!< CAN Frame payload byte7. */
+        };
+    };
+} PDOData_t;
+PDOData_t pdodata;
+void CAN_StartReceive(uint32_t id);
+void CAN_WaitReceive(void);
+void sendPDOData(uint8_t nodeId, PDOData_t *pdoData);
+/*******************************************************************************
+ * Code
+ ******************************************************************************/
+
+/**
+ * @brief 閸欐垿鈧椒绔寸敮褎鐖ｉ崙?CAN 閹躲儲鏋冮妴? * @param[in] id 閺嶅洤鍣敮?ID閵? * @param[in] data 64 娴ｅ秵濮ら弬鍥ㄦ殶閹诡喓鈧? * @param[in] length 閺堫剚顐奸崣鎴︹偓浣烘畱閺佺増宓侀梹鍨閿涘苯宕熸担宥勮礋鐎涙濡妴? * @note 閺堫剙鍤遍弫棰佺窗闂冭顢ｇ粵澶婄窡閸欐垿鈧礁鐣幋鎰┾偓? */
+void CAN_Send(uint32_t id, uint64_t data, uint8_t length)
+{
+    frame.id     = FLEXCAN_ID_STD(id);
+    txXfer.mbIdx = (uint8_t)TX_MESSAGE_BUFFER_NUM;
+    frame.length = length;           // 閻㈣精鐨熼悽銊ㄢ偓鍛瘹鐎规岸鏆辨惔?
+    frame.type   = 0;                // 閺佺増宓佺敮?
+    frame.format = 0;                // 閺嶅洤鍣弽鐓庣础
+    frame.data   = data;             // 婵″倹鐏?length < 8閿涘矂鐝担宥嗘殶閹诡喗妫ら弫?
+    txXfer.frame = &frame;
+    (void)FLEXCAN_TransferSendNonBlocking(EXAMPLE_CAN, &flexcanHandle, &txXfer);
+    while (!txComplete);
+    txComplete = false;
+}
+
+/**
+ * @brief 閸欐垼鎹ｆ稉鈧▎?SDO 鐠囨槒顕Ч鍌樷偓? * @param[in] nodeId 閼哄倻鍋?ID閵? * @param[in] index 鐎电钖勭槐銏犵穿閵? * @param[in] subindex 鐎涙劗鍌ㄥ鏇樷偓? * @return 閹?32 娴ｅ秵妫ょ粭锕€褰块弫鎷屝掗弸鎰畱鏉╂柨娲栭崐绗衡偓? */
+uint32_t SDO_ReadU32(uint8_t nodeId, uint16_t index, uint8_t subindex)
+{
+    uint64_t value;
+
+    value = ((uint64_t)subindex) |
+            ((uint64_t)((index >> 8) & 0xFF) << 8) |
+            ((uint64_t)(index & 0xFF) << 16) |
+            ((uint64_t)0x40 << 24);
+
+    CAN_StartReceive(0x580 + nodeId);
+    CAN_Send(0x600 + nodeId, value, 8);
+    CAN_WaitReceive();
+
+    return ((uint32_t)frame.dataByte7) |
+           ((uint32_t)frame.dataByte6 << 8) |
+           ((uint32_t)frame.dataByte5 << 16) |
+           ((uint32_t)frame.dataByte4 << 24);
+}
+
+/**
+ * @brief 婵夘偄鍘?RPDO 閸欐垿鈧胶绮ㄩ弸鍕┾偓? * @param[out] pdoData RPDO 閺佺増宓佺紒鎾寸€妴? * @param[in] mode 鏉╂劘顢戝Ο鈥崇础閵? * @param[in] ctrl 閹貉冨煑鐎涙ぜ鈧? * @param[in] speed 閻╊喗鐖ｉ柅鐔峰閵? */
+static void FillPDOData(PDOData_t *pdoData, uint8_t mode, uint16_t ctrl, int32_t speed)
+{
+    pdoData->mode  = mode;
+    pdoData->ctrl  = ctrl;
+    pdoData->speed = speed;
+}
+
+/**
+ * @brief 閸掋倖鏌囨す鍗炲З閸ｃ劍妲搁崥锕€鍑℃潻娑樺弳 Operation Enabled閵? * @param[in] statusWord 0x6041 閻樿埖鈧礁鐡ч妴? * @return true 鐞涖劎銇氬鑼剁箻閸忋儰濞囬懗鍊熺箥鐞涘本鈧降鈧? */
+static bool IsServoOperationEnabled(uint16_t statusWord)
+{
+    return (statusWord & STATUS_WORD_OPERATION_ENABLED_MASK) == STATUS_WORD_OPERATION_ENABLED_VALUE;
+}
+
+/**
+ * @brief 閸ョ偠顕?0x6041 閻樿埖鈧礁鐡ч妴? * @param[in] nodeId 閼哄倻鍋?ID閵? * @return 16 娴ｅ秶濮搁幀浣哥摟閵? */
+static uint16_t ReadStatusWord(uint8_t nodeId)
+{
+    return (uint16_t)(SDO_ReadU32(nodeId, 0x6041, 0x00) & 0xFFFFU);
+}
+
+/**
+ * @brief 闁俺绻冪亸鎴﹀櫤 SDO 閸ョ偠顕扮涵顔款吇瑜版挸澧犳す鍗炲З閻樿埖鈧降鈧? * @param[in] nodeId 閼哄倻鍋?ID閵? * @param[in] tag 瑜版挸澧犻梼鑸殿唽閺嶅洨顒烽敍宀€鏁ゆ禍搴㈡）韫囨澧﹂崡鑸偓? * @param[in] expectEnabled 閺勵垰鎯侀張鐔告箿瑜版挸澧犲鑼剁箻閸?Operation Enabled閵? */
+static void VerifyServoStateBySDO(uint8_t nodeId, const char *tag, bool expectEnabled)
+{
+    uint32_t modeDisplay = SDO_ReadU32(nodeId, 0x6061, 0x00);
+    uint16_t statusWord  = ReadStatusWord(nodeId);
+    int32_t actualSpeed  = (int32_t)SDO_ReadU32(nodeId, 0x606C, 0x00);
+
+    LOG_INFO("%s: modeDisplay=%d status=0x%04X actualSpeed=%d\r\n",
+             tag,
+             (int8_t)(modeDisplay & 0xFFU),
+             statusWord,
+             actualSpeed);
+
+    if (expectEnabled && !IsServoOperationEnabled(statusWord))
+    {
+        LOG_INFO("%s: warning, servo is not in Operation Enabled state yet\r\n", tag);
+    }
+}
+
+/**
+ * @brief 閹垫挸宓冩潻鎰攽閺堢喎寮芥＃鍫滀繆閹垬鈧? * @param[in] nodeId 閼哄倻鍋?ID閵? * @param[in] tag 閺冦儱绻旈弽鍥╊劮閵? */
+void LogPDOFeedback(uint8_t nodeId, const char *tag)
+{
+    VerifyServoStateBySDO(nodeId, tag, false);
+}
+
+/**
+ * @brief 閸氼垰濮?CAN 閹恒儲鏁归敍鍫ユ姜闂冭顢ｉ敍澶涚礉闁板秶鐤?MB 娑撶儤瀵氱€?ID
+ * @param id 閺堢喐婀滈幒銉︽暪閻?ID閿涘牊鐖ｉ崙鍡樼壐瀵骏绱?
+ */
+/**
+ * @brief 閸氼垰濮╂稉鈧▎?CAN 閹恒儲鏁归妴? * @param[in] id 閺堢喐婀滈幒銉︽暪閻ㄥ嫭鐖ｉ崙鍡楁姎 ID閵? * @note 娴兼岸鍣搁弬浼村帳缂冾喗甯撮弨鍫曞仏缁犳唻绱濋崣顏呭复閺€鎯邦嚉 ID 閻ㄥ嫭濮ら弬鍥モ偓? */
+void CAN_StartReceive(uint32_t id)
+{
+    /* 娑擃厽顒涜ぐ鎾冲閸欘垵鍏樺锝呮躬鏉╂稖顢戦惃鍕复閺€璁圭礄闁藉牆顕崥灞肩娑?MB閿?*/
+    FLEXCAN_TransferAbortReceive(EXAMPLE_CAN, &flexcanHandle, RX_MESSAGE_BUFFER_NUM);
+
+    /* 閺囧瓨鏌婇崗銊ョ湰閹衡晝鐖滈敍姘矌閸忎浇顔忛崠褰掑帳鐠?ID 閻ㄥ嫭濮ら弬鍥箻閸?*/
+    FLEXCAN_SetRxMbGlobalMask(EXAMPLE_CAN, FLEXCAN_RX_MB_STD_MASK(id, 0, 0));
+
+    /* 闁插秵鏌婇柊宥囩枂 Rx Message Buffer */
+    mbConfig.format = kFLEXCAN_FrameFormatStandard;
+    mbConfig.type   = kFLEXCAN_FrameTypeData;
+    mbConfig.id     = FLEXCAN_ID_STD(id);
+    FLEXCAN_SetRxMbConfig(EXAMPLE_CAN, RX_MESSAGE_BUFFER_NUM, &mbConfig, true);
+
+    /* 閸氼垰濮╅棃鐐烘▎婵夌偞甯撮弨?*/
+    rxXfer.mbIdx = (uint8_t)RX_MESSAGE_BUFFER_NUM;
+    rxXfer.frame = &frame;
+    (void)FLEXCAN_TransferReceiveNonBlocking(EXAMPLE_CAN, &flexcanHandle, &rxXfer);
+}
+
+/**
+ * @brief 缁涘绶熼幒銉︽暪鐎瑰本鍨氶敍灞借嫙閹垫挸宓冮幒銉︽暪閸掓壆娈戠敮褌淇婇幁?
+ */
+/**
+ * @brief 闂冭顢ｇ粵澶婄窡閹恒儲鏁圭€瑰本鍨氶敍灞借嫙閹垫挸宓冮弨璺哄煂閻?CAN 閹躲儲鏋冮妴? */
+void CAN_WaitReceive(void)
+{
+    while (!rxComplete)
+    {
+    }
+    rxComplete = false;
+
+    LOG_INFO("Rx MB ID: 0x%3x, Rx MB data: 0x%02X%02X%02X%02X%02X%02X%02X%02X, Time stamp: %d\r\n",
+             (frame.id >> CAN_ID_STD_SHIFT),  
+              frame.dataByte3,  frame.dataByte2,  frame.dataByte1,  frame.dataByte0,
+              frame.dataByte7,  frame.dataByte6,  frame.dataByte5,  frame.dataByte4, frame.timestamp);
+}
+
+
+/**
+ * @brief SDO閹躲儲鏋冮崣鎴炴暪閸戣姤鏆?
+ *
+ * @param[in] nodeId 鐠佹儳顦琁D
+ * @param[in] index 鐎电钖勭槐銏犵穿
+ * @param[in] subindex 鐎电钖勭€涙劗鍌ㄥ?
+ * @param[in] data 閺佺増宓?
+ * @param[in] dataSize 閺佺増宓佺€涙濡梹鍨
+ * 
+ * @return 閺?
+ * 
+ * @note 閺佺増宓佺€涙濡梹鍨閸欘亣鍏橀柅澶嬪1 2 4 
+ *       鐎电钖勭槐銏犵穿2鐎涙濡?
+ *       鐎电钖勭€涙劗鍌ㄥ?鐎涙濡?
+ */
+/**
+ * @brief 閸欐垼鎹ｆ稉鈧▎?SDO 閸愭瑨顕Ч鍌樷偓? * @param[in] nodeId 閼哄倻鍋?ID閵? * @param[in] index 鐎电钖勭槐銏犵穿閵? * @param[in] subindex 鐎涙劗鍌ㄥ鏇樷偓? * @param[in] data 鐟曚礁鍟撻崗銉ф畱閺佺増宓侀妴? * @param[in] dataSize 閺佺増宓侀梹鍨閿涘苯褰ч弨顖涘瘮 1閵?閵? 鐎涙濡妴? */
+void SDO_Write(uint8_t nodeId, uint16_t index, uint8_t subindex, uint32_t data, uint8_t dataSize)
+{
+    uint8_t cs;
+    uint64_t value;
+    // 閺嶈宓侀弫鐗堝祦闂€鍨闁瀚ㄩ崨鎴掓姢閻礁鑻熼幋顏呮焽閺佺増宓?
+    if (dataSize == 1) {
+        cs = 0x2F;
+        data &= 0xFF;          // 娴犲懍绻氶悾娆庣秵8娴?
+    } else if (dataSize == 2) {
+        cs = 0x2B;
+        data &= 0xFFFF;        // 娴犲懍绻氶悾娆庣秵16娴?
+    } else if (dataSize == 4) {
+        cs = 0x23;
+        // data 閸忋劑鍎撮張澶嬫櫏閿涘本妫ら棁鈧幋顏呮焽
+    } else {
+        // 婢跺嫮鎮婂鍌氱埗闂€鍨閿涘牆褰查弽瑙勫祦闂団偓鐟曚焦鍧婇崝鐘绘晩鐠囶垰顦╅悶鍡礉濮濄倕顦╂妯款吇娴ｈ法鏁?鐎涙濡崨鎴掓姢閿?
+        cs = 0x23;
+    }
+
+    // 閺嬪嫰鈧?64 娴?CAN 閺佺増宓侀崺鐕傜礄鐏忓繒顏惔蹇ョ礆閿?
+    // 鐎涙濡?~7閿涙碍鏆熼幑顔肩毈缁旑垽绱檇ata 閻?4 娑擃亜鐡ч懞鍌︾礉閺堫亞鏁ょ€涙濡懛顏勫З娑?閿?
+    // 鐎涙濡?   閿涙艾鎳℃禒銈囩垳 cs
+    // 鐎涙濡?   閿涙氨鍌ㄥ鏇㈢彯鐎涙濡?((index >> 8) & 0xFF)
+    // 鐎涙濡?   閿涙氨鍌ㄥ鏇氱秵鐎涙濡?(index & 0xFF)
+    // 鐎涙濡?   閿涙艾鐡欑槐銏犵穿 subindex
+    value = ((uint64_t)subindex) |
+            ((uint64_t)((index >> 8) & 0xFF) << 8) |
+            ((uint64_t)(index & 0xFF) << 16) |
+            ((uint64_t)cs << 24) |
+            ((uint64_t)((data >> 24) & 0xFF) << 32) |
+            ((uint64_t)((data >> 16) & 0xFF) << 40) |
+            ((uint64_t)((data >> 8)  & 0xFF) << 48) |
+            ((uint64_t)(data & 0xFF) << 56);
+
+    // 閸氼垰濮╅幒銉︽暪 SDO 閸濆秴绨查敍鍫滅矤閼哄倻鍋ｉ崷鏉挎絻 0x580 + nodeId閿?
+    CAN_StartReceive(0x580 + nodeId);
+
+    // 閸欐垿鈧?SDO 鐠囬攱鐪伴敍鍫濆煂閼哄倻鍋ｉ崷鏉挎絻 0x600 + nodeId閿?
+    CAN_Send(0x600 + nodeId, value, 8);
+
+    // 缁涘绶熼崫宥呯安閿涘牊鏁為幇蹇ョ窗鐎圭偤妾担璺ㄦ暏娑擃厼缂撶拋顔煎閸忋儴绉撮弮鑸垫簚閸掕绱?
+    CAN_WaitReceive();
+}
+
+/**
+ * @brief  瀹搞儰缍斿Ο鈥崇础鐠佸墽鐤嗛崙鑺ユ殶
+ * 
+ * @param[in]  data 1 娴ｅ秶鐤嗗Ο鈥崇础
+ *                  3 闁喎瀹冲Ο鈥崇础
+ * 
+ * 
+ * @return 閺?
+ * 
+ * @note  data閻╊喖澧犻崣顏囧厴鏉堟挸鍙嗗锝嗘殻閺?
+ * 
+ */
+/**
+ * @brief 闁俺绻?SDO 鐠佸墽鐤嗘潻鎰攽濡€崇础閵? * @param[in] data 濡€崇础閸婄》绱濇笟瀣洤 0x03 鐞涖劎銇氶柅鐔峰濡€崇础閵? */
+void Direct_SetAType(uint8_t data)
+{
+    SDO_Write(1, 0x6060, 0x00, data, 1);
+}
+ 
+/**
+ * @brief  閻╊喗鐖ｉ柅鐔峰鐠佸墽鐤嗛崙鑺ユ殶
+ * 
+ * @param[in]  speed 閸楁洑缍呮稉绡岲C閿涘本顒滅拹鐔锋綆閸?
+ * 
+ * @return 閺?
+ * 
+ * @note  閺?
+ * 
+ */
+/**
+ * @brief 闁俺绻?SDO 鐠佸墽鐤嗛惄顔界垼闁喎瀹崇€电钖?0x60FF閵? * @param[in] speed 閻╊喗鐖ｉ柅鐔峰閵? */
+void Direct_SetSingleParam(int32_t speed)
+{
+    // 鐏?int32_t 鏉烆剚宕叉稉鐑樻￥缁楋箑褰?32 娴ｅ稄绱濇穱婵囧瘮閸樼喕藟閻椒缍呭Ο鈥崇础
+    uint32_t uspeed = (uint32_t)speed;
+
+    SDO_Write(1, 0x60FF, 0x00, uspeed, 4);
+}
+
+/**
+ * @brief  娴肩儤婀囨す鍗炲З閸ｃ劍甯堕崚璺虹摟閸氼垰濮╅崙鑺ユ殶
+ * 
+ * 
+ * @return 閺?
+ * 
+ * @note  閺?
+ * 
+ */
+/**
+ * @brief 闁俺绻?SDO 娓氭繃顐奸崣鎴︹偓?0x06閵?x07閵?x0F 鐎瑰本鍨氭す鍗炲З娴ｈ儻鍏橀妴? */
+void Direct_SetAxisEnable(void)
+{
+    SDO_Write(1, 0x6040, 0x00, 0x06, 2);
+    SDK_DelayAtLeastUs(1000000, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+    SDO_Write(1, 0x6040, 0x00, 0x07, 2);
+    SDK_DelayAtLeastUs(1000000, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+    SDO_Write(1, 0x6040, 0x00, 0x0F, 2);
+}
+
+/**
+ * @brief  閸旂娀鈧喎瀹崇拋鍓х枂閸戣姤鏆?
+ * 
+ * @param[in]  accSpeed 閸旂娀鈧喎瀹抽崐纭风礉閸楁洑缍呮稉绡岲C
+ * 
+ * @return 閺?
+ * 
+ * @note  閸旂娀鈧喎瀹抽崐闂磋礋濮濓絾鏆ｉ弫?
+ * 
+ */
+/**
+ * @brief 闁俺绻?SDO 鐠佸墽鐤嗛崝鐘烩偓鐔峰鐎电钖?0x6083閵? * @param[in] accSpeed 閸旂娀鈧喎瀹抽妴? */
+void Direct_SetAccel(uint32_t accSpeed)
+{
+    SDO_Write(1, 0x6083, 0x00, accSpeed, 4);
+}
+
+/**
+ * @brief  閸戝繘鈧喎瀹崇拋鍓х枂閸戣姤鏆?
+ * 
+ * @param[in]  decSpeed 閸戝繘鈧喎瀹抽崐纭风礉閸楁洑缍呮稉绡岲C
+ * 
+ * @return 閺?
+ * 
+ * @note  閸戝繘鈧喎瀹抽崐闂磋礋濮濓絾鏆ｉ弫?
+ * 
+ */
+/**
+ * @brief 闁俺绻?SDO 鐠佸墽鐤嗛崙蹇涒偓鐔峰鐎电钖?0x6084閵? * @param[in] decSpeed 閸戝繘鈧喎瀹抽妴? */
+void Direct_SetDecel(uint32_t decSpeed)
+{
+    SDO_Write(1, 0x6084, 0x00, decSpeed, 4);
+}
+
+/**
+ * @brief  濞撳懘娅?RPDO1 閸樼喐婀侀弰鐘茬殸
+ * 
+ * @param[in]  nodeId 鐠佹儳顦琁D
+ * 
+ * @return 閺?
+ * 
+ * @note  閺?
+ * 
+ */
+/**
+ * @brief 濞撳懐鈹?RPDO1 閺勭姴鐨犻弫浼村櫤閵? * @param[in] nodeId 閼哄倻鍋?ID閵? */
+void clearRPDO1Mapping(uint8_t nodeId)
+{
+    SDO_Write(nodeId, 0x1600, 0x00, 0x00, 1);
+}
+
+/**
+ * @brief  闁板秶鐤?RPDO1 閺勭姴鐨犻崣鍌涙殶
+ * 
+ * @param[in]  nodeId 鐠佹儳顦琁D
+ * 
+ * @return 閺?
+ * 
+ * @note  閺?
+ * 
+ */
+/**
+ * @brief 闁板秶鐤?RPDO1 閺勭姴鐨犻崘鍛啇閵? * @param[in] nodeId 閼哄倻鍋?ID閵? * @note 瑜版挸澧犻弰鐘茬殸娑?6060 濡€崇础閵?040 閹貉冨煑鐎涙ぜ鈧?0FF 閻╊喗鐖ｉ柅鐔峰閵? */
+void configureRPDO1Mapping(uint8_t nodeId)
+{
+    SDO_Write(nodeId, 0x1600, 0x01, 0x60600008, 4);
+    SDO_Write(nodeId, 0x1600, 0x02, 0x60400010, 4);
+    SDO_Write(nodeId, 0x1600, 0x03, 0x60FF0020, 4);
+}
+
+/**
+ * @brief  鐠佸墽鐤?RPDO1 閺勭姴鐨犻弫浼村櫤
+ * 
+ * @param[in]  nodeId 鐠佹儳顦琁D
+ * 
+ * @return 閺?
+ * 
+ * @note  閺?
+ * 
+ */
+/**
+ * @brief 鐠佸墽鐤?RPDO1 閺勭姴鐨犻弫浼村櫤閵? * @param[in] nodeId 閼哄倻鍋?ID閵? */
+void SetRPDO1MappingNumber(uint8_t nodeId)
+{
+    SDO_Write(nodeId, 0x1600, 0x00, 0x03, 1);
+}
+
+/**
+ * @brief 闁板秶鐤?RPDO1 闁矮淇婇崣鍌涙殶閵? * @param[in] nodeId 閼哄倻鍋?ID閵? * @note 閸氼垳鏁ら惃?COB-ID 娑?0x200 + nodeId閵? */
+void configureRPDO1Communication(uint8_t nodeId)
+{
+    SDO_Write(nodeId, 0x1400, 0x01, (uint32_t)(0x80000000U | (0x200U + nodeId)), 4);
+    SDO_Write(nodeId, 0x1400, 0x02, 255, 1);
+    SDO_Write(nodeId, 0x1400, 0x01, (uint32_t)(0x200U + nodeId), 4);
+}
+
+/**
+ * @brief  閸欐垿鈧?NMT 閸氼垰濮╅幐鍥х暰閼哄倻鍋ｉ惃鍕嚒娴?
+ * 
+ * @param  nodeId  鐟曚礁鎯庨崝銊ф畱閼哄倻鍋?ID閿涘牐瀵栭崶?1~127閿?
+ * 
+ * @return 閺?
+ * 
+ * @note  閼哄倻鍋?ID 娑?0 閺冩儼銆冪粈鍝勬儙閸斻劍澧嶉張澶庡Ν閻?
+ * 
+ */
+/**
+ * @brief 閸欐垿鈧?NMT Start 閸涙垝鎶ら妴? * @param[in] nodeId 閼哄倻鍋?ID閵? */
+void sendNMTStartNodeCommand(uint8_t nodeId)
+{
+    CAN_Send(0x000, (((uint64_t)0x01) | ((uint64_t)nodeId << 8)) << 16, 8);
+}
+/**
+ * @brief  閸欐垿鈧?PDO 閺佺増宓?
+ * 
+ * @param[in]  pdoData 瀹搞儰缍斿Ο鈥崇础 閹貉冨煑鐎?閻╊喗鐖ｉ柅鐔峰缂佹挻鐎担?
+ * 
+ * @note  閺?
+ * 
+ */
+/**
+ * @brief 閹垫挸瀵橀獮璺哄絺闁椒绔寸敮?RPDO1閵? * @param[in] nodeId 閼哄倻鍋?ID閵? * @param[in,out] pdoData 鐟曚礁褰傞柅浣烘畱 RPDO 閺佺増宓佺紒鎾寸€妴? */
+void sendPDOData(uint8_t nodeId, PDOData_t *pdoData)
+{
+    static bool firstLog      = true;
+    static uint8_t lastNodeId = 0U;
+    static uint8_t lastMode   = 0U;
+    static uint16_t lastCtrl  = 0U;
+    static int32_t lastSpeed  = 0;
+
+    pdoData->dataByte0 = (uint32_t)pdoData->speed & 0xFF;
+    pdoData->dataByte1 = pdoData->ctrl >> 8;
+    pdoData->dataByte2 = pdoData->ctrl & 0xFF;
+    pdoData->dataByte3 = pdoData->mode;
+    pdoData->dataByte4 = 0x00;//
+    pdoData->dataByte5 = ((uint32_t)pdoData->speed >> 24) & 0xFF;
+    pdoData->dataByte6 = ((uint32_t)pdoData->speed >> 16) & 0xFF;
+    pdoData->dataByte7 = ((uint32_t)pdoData->speed >> 8) & 0xFF;
+
+    CAN_Send(RPDO1_BASE_COB_ID + nodeId, pdoData->data, 8);
+    if (firstLog || (lastNodeId != nodeId) || (lastMode != pdoData->mode) || (lastCtrl != pdoData->ctrl) || (lastSpeed != pdoData->speed))
+    {
+        LOG_INFO("RPDO1 sent: mode=0x%02X ctrl=0x%04X speed=%d raw=0x%02X%02X%02X%02X%02X%02X%02X%02X\r\n",
+                 pdoData->mode,
+                 pdoData->ctrl,
+                 pdoData->speed,
+                 pdoData->dataByte7, pdoData->dataByte6, pdoData->dataByte5, pdoData->dataByte4,
+                 pdoData->dataByte3, pdoData->dataByte2, pdoData->dataByte1, pdoData->dataByte0);
+        firstLog = false;
+        lastNodeId = nodeId;
+        lastMode = pdoData->mode;
+        lastCtrl = pdoData->ctrl;
+        lastSpeed = pdoData->speed;
+    }
+}
+
+/**
+ * @brief 娴犮儱娴愮€规艾鎳嗛張鐔煎櫢婢跺秴褰傞柅浣告倱娑撯偓缂?RPDO閵? * @param[in] nodeId 閼哄倻鍋?ID閵? * @param[in,out] pdoData 鐟曚線鍣告径宥呭絺闁胶娈?RPDO 閺佺増宓佺紒鎾寸€妴? * @param[in] repeatCount 闁插秴顦查崣鎴︹偓浣诡偧閺佽埇鈧? * @param[in] periodUs 娑撱倖顐奸崣鎴︹偓浣风闂傚娈戝鑸垫閿涘苯宕熸担宥勮礋瀵邦喚顫楅妴? */
+static void SendRPDORepeated(uint8_t nodeId, PDOData_t *pdoData, uint32_t repeatCount, uint32_t periodUs)
+{
+    uint32_t i;
+
+    for (i = 0; i < repeatCount; i++)
+    {
+        sendPDOData(nodeId, pdoData);
+        SDK_DelayAtLeastUs(periodUs, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+    }
+}
+
+/**
+ * @brief  SDO閸氼垰濮╂导鐑樻箛閻㈠灚婧€
+ * 
+ * 
+ * @note  閺?
+ * 
+ */
+/**
+ * @brief 娴肩姷绮洪惃鍕嚱 SDO 閸氼垰濮╁ù浣衡柤閵? * @note 鐠囥儱鍤遍弫棰佺箽閻ｆ瑤缍旀稉鍝勵嚠閻撗冩嫲鐠嬪啳鐦悽銊┾偓鏂烩偓? */
+void SDO_StartServoMotor(void)
+{
+    Direct_SetAType(3);//鐠佸墽鐤嗛柅鐔峰濡€崇础
+    Direct_SetSingleParam(1000000);//鐠佸墽鐤嗛惄顔界垼闁喎瀹?
+    Direct_SetAccel(2000000);//鐠佸墽鐤嗛崝鐘烩偓鐔峰
+    Direct_SetDecel(2000000);//鐠佸墽鐤嗛崙蹇涒偓鐔峰
+    Direct_SetAxisEnable();//鐠佸墽鐤嗛幒褍鍩楃€?
+}
+
+/**
+ * @brief  PDO閸氼垰濮╂导鐑樻箛閻㈠灚婧€
+ * 
+ * @param[in]  nodeId 鐠佹儳顦琁D
+ * 
+ * @note  閺?
+ * 
+ */
+/**
+ * @brief 濮濓絽绱￠惃?RPDO 閸氼垰濮╁ù浣衡柤閵? * @param[in] nodeId 閼哄倻鍋?ID閵? * @note 閸氼垰濮╅梼鑸殿唽娴ｈ法鏁?RPDO 娑撳褰?0x06閵?x07閵?x0F閿? *       娑擃參妫跨粚鎸庡絻鐏忔垿鍣?SDO 閸ョ偠顕扮涵顔款吇閻樿埖鈧緤绱辨潻鎰攽閺堢喐甯堕崚璺虹摟閸ュ搫鐣炬穱婵囧瘮 0x0F閵? */
+void PDO_StartServoMotor(uint8_t nodeId)
+{
+    uint32_t runtimeCounter = 0U;
+
+    FillPDOData(&pdodata, SERVO_MODE_VELOCITY, CTRL_WORD_SHUTDOWN, 1000000);
+
+    clearRPDO1Mapping(nodeId);
+    configureRPDO1Mapping(nodeId);
+    SetRPDO1MappingNumber(nodeId);
+    configureRPDO1Communication(nodeId);
+    sendNMTStartNodeCommand(nodeId);
+    SDK_DelayAtLeastUs(50000U, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+
+    SendRPDORepeated(nodeId, &pdodata, 8U, PDO_STARTUP_PERIOD_US);
+    VerifyServoStateBySDO(nodeId, "After shutdown", false);
+
+    FillPDOData(&pdodata, SERVO_MODE_VELOCITY, CTRL_WORD_SWITCH_ON, 1000000);
+    SendRPDORepeated(nodeId, &pdodata, 8U, PDO_STARTUP_PERIOD_US);
+    VerifyServoStateBySDO(nodeId, "After switch on", false);
+
+    FillPDOData(&pdodata, SERVO_MODE_VELOCITY, CTRL_WORD_ENABLE_OPERATION, 1000000);
+    SendRPDORepeated(nodeId, &pdodata, 12U, PDO_STARTUP_PERIOD_US);
+    VerifyServoStateBySDO(nodeId, "After enable operation", true);
+
+    if (!IsServoOperationEnabled(ReadStatusWord(nodeId)))
+    {
+        SendRPDORepeated(nodeId, &pdodata, 12U, PDO_STARTUP_PERIOD_US);
+        VerifyServoStateBySDO(nodeId, "Retry enable operation", true);
+    }
+
+    while (true)
+    {
+        sendPDOData(nodeId, &pdodata);
+        SDK_DelayAtLeastUs(PDO_STARTUP_PERIOD_US, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+
+        runtimeCounter++;
+        if (runtimeCounter >= PDO_RUNTIME_FEEDBACK_CYCLES)
+        {
+            runtimeCounter = 0U;
+            LogPDOFeedback(nodeId, "Runtime feedback");
+        }
+    }
+
+    static unsigned char value = 0;
+    //闁板秶鐤哛PDO閺佺増宓?
+    pdodata.mode = 0x03;
+    pdodata.ctrl = 0x06;
+    pdodata.speed = 1000000;
+
+    // 闁板秶鐤哛PDO閺勭姴鐨犻崪瀛∕T閸氼垰濮?
+    clearRPDO1Mapping(nodeId);
+    configureRPDO1Mapping(nodeId);
+    SetRPDO1MappingNumber(nodeId);
+    sendNMTStartNodeCommand(nodeId);
+
+    /* 娑撹鎯婇悳顖ょ窗閸涖劍婀￠幀褍褰傞柅?PDO 閺佺増宓?*/
+    while (true)
+    {
+        value ++;
+        if(value == 1)
+        {
+            pdodata.ctrl = 0x06;
+        }
+        else if(value == 80)
+        {
+            pdodata.ctrl = 0x07;
+        }
+        else if(value == 160)
+        { 
+            pdodata.ctrl = 0x0F;
+        }
+        else if(value >= 165)
+        {
+            value = 165;
+        }
+
+        sendPDOData(nodeId, &pdodata);             // 閸欐垿鈧?PDO 閺佺増宓?(ID 0x201, 閸ュ搫鐣鹃弫鐗堝祦)
+        
+        /* 閺嶈宓侀棁鈧Ч鍌濐啎鐎规艾褰傞柅浣告噯閺堢噦绱濇笟瀣洤濮?8ms 閸欐垿鈧椒绔村▎?*/
+        SDK_DelayAtLeastUs(8000, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+    }
+}
+
+/**
+ * @brief 闁板秶鐤?TPDO1 閺勭姴鐨犻敍鍫㈠Ц閹礁鐡?041h + 鐎圭偤妾担宥囩枂6064h閿涘鑻熺拋鍓х枂閸涖劍婀￠崣鎴︹偓?
+ * @param nodeId   閼哄倻鍋D閿涘牓绮拋?閿?
+ * @param periodMs 閸欐垿鈧礁鎳嗛張鐕傜礄濮ｎ偆顫楅敍澶涚礉瀵ら缚顔呴埉?0ms
+ */
+/**
+ * @brief 闁板秶鐤?TPDO1 閻ㄥ嫭妲х亸鍕瑢閸欐垿鈧焦鏌熷蹇嬧偓? * @param[in] nodeId 閼哄倻鍋?ID閵? * @param[in] periodMs 娴滃娆㈢€规碍妞傞崣鎴︹偓浣告噯閺堢噦绱濋崡鏇氱秴娑撶儤顕犵粔鎺嬧偓? */
+void configureTPDO1(uint8_t nodeId, uint16_t periodMs)
+{
+    // 1. 濞撳懘娅庨悳鐗堟箒TPDO1閺勭姴鐨犻敍鍫濈摍缁便垹绱?閸?閿?
+    SDO_Write(nodeId, 0x1A00, 0x00, 0, 1);          // 閺勭姴鐨犻弫浼村櫤缂?
+
+    // 2. 閸愭瑥鍙嗛弰鐘茬殸閺夛紕娲伴敍?2娴ｅ秴鐨粩顖涙殶閸婄》绱扮槐銏犵穿+鐎涙劗鍌ㄥ?闂€鍨閿?
+    // 閻樿埖鈧礁鐡?6041h sub0 16娴?閳?0x60410010
+    // 鐎圭偤妾担宥囩枂 6064h sub0 32娴?閳?0x60640020
+    SDO_Write(nodeId, 0x1A00, 0x01, 0x60410010, 4); // 閺夛紕娲?閿涙氨濮搁幀浣哥摟
+    SDO_Write(nodeId, 0x1A00, 0x02, 0x60640020, 4); // 閺夛紕娲?閿涙艾鐤勯梽鍛秴缂?
+
+    // 3. 鐠佸墽鐤嗛弰鐘茬殸閺佷即鍣洪敍?娑擃亜顕挒鈽呯礆
+    SDO_Write(nodeId, 0x1A00, 0x00, 2, 1);
+
+    // 4. 闁板秶鐤員PDO闁矮淇婇崣鍌涙殶閿涘牏鍌ㄥ?x1800閿?
+    // 鐎涙劗鍌ㄥ?閿涙矮绱舵潏鎾惰閸ㄥ绱?55 = 瀵倹顒為敍鍫㈡暠娴滃娆㈤弮鍫曟？閹貉冨煑閸涖劍婀￠敍?
+    SDO_Write(nodeId, 0x1800, 0x02, 1, 1);
+    // 鐎涙劗鍌ㄥ?閿涙矮绨ㄦ禒鑸垫闂傝揪绱欓崡鏇氱秴1ms閿涘绱濇笟瀣洤10ms
+    //SDO_Write(nodeId, 0x1800, 0x05, periodMs, 2);
+    // 鐎涙劗鍌ㄥ?閿涙氨顩﹀銏℃闂傝揪绱欓崣顖炩偓澶涚礉閺堚偓鐏忓繘妫块梾鏃撶礉閸楁洑缍?00娓璼閿涘绱濋崣顖欑瑝鐠佸墽鐤?
+
+    // 閸欐垿鈧腐MT閸氼垰濮╅崨鎴掓姢閿涘奔濞囬懞鍌滃仯1鏉╂稑鍙哋perational閻樿埖鈧?
+    sendNMTStartNodeCommand(1);
+
+}
+
+/*!
+ * @brief FlexCAN Call Back function
+ */
+/**
+ * @brief FlexCAN 娑擃厽鏌囬崶鐐剁殶閵? * @note 娴犲懏娲块弬鏉垮絺闁礁鐣幋鎰┾偓浣瑰复閺€璺虹暚閹存劕鎷伴崬銈夊晪閺嶅洤绻旀担宥冣偓? */
+static FLEXCAN_CALLBACK(flexcan_callback)
+{
+    switch (status)
+    {
+        case kStatus_FLEXCAN_RxIdle:
+            if (RX_MESSAGE_BUFFER_NUM == result)
+            {
+                rxComplete = true;
+            }
+            break;
+
+        case kStatus_FLEXCAN_TxIdle:
+            if (TX_MESSAGE_BUFFER_NUM == result)
+            {
+                txComplete = true;
+            }
+            break;
+
+        case kStatus_FLEXCAN_WakeUp:
+            wakenUp = true;
+            break;
+
+        default:
+            break;
+    }
+}
+
+/*!
+ * @brief Main function
+ */
+/**
+ * @brief 缁嬪绨崗銉ュ經閵? * @return 缁嬪绨悶鍡氼啈娑撳﹣绗夋导姘崇箲閸ョ偑鈧? */
+int main(void)
+{
+    flexcan_config_t flexcanConfig;
+    
+    
+    /* Initialize board hardware. */
+    /* M7 has its local cache and enabled by default,
+     * need to set smart subsystems (0x28000000 ~ 0x3FFFFFFF)
+     * non-cacheable before accessing this address region */
+    BOARD_InitMemory();
+
+    /* Board specific RDC settings */
+    BOARD_RdcInit();
+
+    BOARD_InitBootPins();
+    BOARD_BootClockRUN();
+    BOARD_InitDebugConsole();
+
+    CLOCK_SetRootMux(kCLOCK_RootFlexCan1, kCLOCK_FlexCanRootmuxSysPll1); /* Set FLEXCAN1 source to SYSTEM PLL1 800MHZ */
+    CLOCK_SetRootDivider(kCLOCK_RootFlexCan1, 2U, 5U);                   /* Set root clock to 800MHZ / 10 = 80MHZ */
+    LOG_INFO("********* FLEXCAN Interrupt EXAMPLE *********\r\n");
+    /* GPIO5_IO05 is used to control CAN1_STBY which is ebaled active high */
+    gpio_pin_config_t config = {kGPIO_DigitalOutput, 1, kGPIO_NoIntmode};
+    GPIO_PinInit(GPIO5, 5U, &config);
+
+    LOG_INFO("********* FLEXCAN Interrupt EXAMPLE *********\r\n");
+    LOG_INFO("    Message format: Standard (11 bit id)\r\n");
+    LOG_INFO("    Message buffer %d used for Rx.\r\n", RX_MESSAGE_BUFFER_NUM);
+    LOG_INFO("    Message buffer %d used for Tx.\r\n", TX_MESSAGE_BUFFER_NUM);
+    LOG_INFO("    Interrupt Mode: Enabled\r\n");
+    LOG_INFO("    Operation Mode: TX and RX --> Normal\r\n");
+    LOG_INFO("*********************************************\r\n\r\n");
+
+    /* Get FlexCAN module default Configuration. */
+    /*
+     * flexcanConfig.clkSrc                 = kFLEXCAN_ClkSrc0;
+     * flexcanConfig.bitRate               = 1000000U;
+     * flexcanConfig.bitRateFD             = 2000000U;
+     * flexcanConfig.maxMbNum               = 16;
+     * flexcanConfig.enableLoopBack         = false;
+     * flexcanConfig.enableSelfWakeup       = false;
+     * flexcanConfig.enableIndividMask      = false;
+     * flexcanConfig.disableSelfReception   = false;
+     * flexcanConfig.enableListenOnlyMode   = false;
+     * flexcanConfig.enableDoze             = false;
+     */
+    FLEXCAN_GetDefaultConfig(&flexcanConfig);
+
+
+#if (defined(USE_IMPROVED_TIMING_CONFIG) && USE_IMPROVED_TIMING_CONFIG)
+    flexcan_timing_config_t timing_config;
+    memset(&timing_config, 0, sizeof(flexcan_timing_config_t));
+    if (FLEXCAN_CalculateImprovedTimingValues(EXAMPLE_CAN, flexcanConfig.bitRate, EXAMPLE_CAN_CLK_FREQ, &timing_config))
+    {
+        /* Update the improved timing configuration*/
+        memcpy(&(flexcanConfig.timingConfig), &timing_config, sizeof(flexcan_timing_config_t));
+    }
+    else
+    {
+        LOG_INFO("No found Improved Timing Configuration. Just used default configuration\r\n\r\n");
+    }
+#endif
+
+    FLEXCAN_Init(EXAMPLE_CAN, &flexcanConfig, EXAMPLE_CAN_CLK_FREQ);
+
+    /* Create FlexCAN handle structure and set call back function. */
+    FLEXCAN_TransferCreateHandle(EXAMPLE_CAN, &flexcanHandle, flexcan_callback, NULL);
+
+    /* Setup Tx Message Buffer. */
+
+    FLEXCAN_SetTxMbConfig(EXAMPLE_CAN, TX_MESSAGE_BUFFER_NUM, true);
+
+    LOG_INFO("Start servo by RPDO1 only\r\n\r\n");
+
+    PDO_StartServoMotor(1);
+
+}

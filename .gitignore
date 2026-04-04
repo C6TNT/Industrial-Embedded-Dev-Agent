@@ -1,0 +1,82 @@
+# OS / Explorer
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Logs / temp
+*.tmp
+*.temp
+*.bak
+*.log
+
+# Office temp files
+~$*.docx
+~$*.doc
+~$*.xlsx
+~$*.pptx
+
+# Build / binary artifacts
+build/
+dist/
+out/
+debug/
+release/
+ddr_release/
+ddr_debug/
+CMakeFiles/
+.cmake/
+CMakeCache.txt
+cmake_install.cmake
+build.ninja
+.ninja_log
+.ninja_deps
+output.map
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.exe
+*.bin
+*.elf
+*.ko
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# Local memory / generated notes
+.codex-memory.md
+
+# Nested repositories accidentally copied into the workspace
+**/.git/
+
+# Large duplicated workspaces / generated intermediate trees
+资料/imxSoem-motion-control_first/
+资料/imxSoem-motion-control_second/
+
+# Large reference bundles better kept out of the source repo
+资料/Demo/
+资料/SV660N系列伺服用户手册-CN-B06.PDF
+资料/Kinco FD5伺服驱动器使用手册240607.pdf
+资料/TLIMX8MP-EVM 评估板学习过程/TLIMX8MP-EVM_上手指南.docx
+资料/TLIMX8MP-EVM 评估板学习过程/TLIMX8MP-EVM_上手指南.pdf
+资料/imxSoem-motion-control/imxSoem-motion-control/imxSoem-motion-control/Kinco FD5伺服驱动器使用手册240607.pdf

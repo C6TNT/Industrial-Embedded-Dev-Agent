@@ -1,0 +1,879 @@
+/*
+ * Copyright (c) 2015, Freescale Semiconductor, Inc.
+ * Copyright 2016-2022 NXP
+ * All rights reserved.
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
+#include "fsl_debug_console.h"
+#include "fsl_flexcan.h"
+#include "pin_mux.h"
+#include "clock_config.h"
+#include "board.h"
+
+#include "fsl_gpio.h"
+/*******************************************************************************
+ * Definitions
+ ******************************************************************************/
+#define EXAMPLE_CAN FLEXCAN1
+#define EXAMPLE_CAN_CLK_FREQ                                                                    \
+    (CLOCK_GetPllFreq(kCLOCK_SystemPll1Ctrl) / (CLOCK_GetRootPreDivider(kCLOCK_RootFlexCan1)) / \
+     (CLOCK_GetRootPostDivider(kCLOCK_RootFlexCan1)))
+/* Set USE_IMPROVED_TIMING_CONFIG macro to use api to calculates the improved CAN / CAN FD timing values. */
+#define USE_IMPROVED_TIMING_CONFIG (1U)
+
+#define RX_MESSAGE_BUFFER_NUM (9)
+#define TX_MESSAGE_BUFFER_NUM (8)
+#define RPDO1_BASE_COB_ID (0x200U)
+#define SERVO_MODE_VELOCITY (0x03U)
+#define CTRL_WORD_SHUTDOWN (0x0006U)
+#define CTRL_WORD_SWITCH_ON (0x0007U)
+#define CTRL_WORD_ENABLE_OPERATION (0x000FU)
+#define STATUS_WORD_OPERATION_ENABLED_MASK (0x006FU)
+#define STATUS_WORD_OPERATION_ENABLED_VALUE (0x0027U)
+#define PDO_STARTUP_PERIOD_US (8000U)
+#define PDO_RUNTIME_FEEDBACK_CYCLES (125U)
+
+/* Fix MISRA_C-2012 Rule 17.7. */
+#define LOG_INFO (void)PRINTF
+#if (defined(USE_CANFD) && USE_CANFD)
+/*
+ *    DWORD_IN_MB    DLC    BYTES_IN_MB             Maximum MBs
+ *    2              8      kFLEXCAN_8BperMB        64
+ *    4              10     kFLEXCAN_16BperMB       42
+ *    8              13     kFLEXCAN_32BperMB       25
+ *    16             15     kFLEXCAN_64BperMB       14
+ *
+ * Dword in each message buffer, Length of data in bytes, Payload size must align,
+ * and the Message Buffers are limited corresponding to each payload configuration:
+ */
+#define DLC         (15)
+#define BYTES_IN_MB kFLEXCAN_64BperMB
+#else
+#define DLC (8)
+#endif
+/*******************************************************************************
+ * Prototypes
+ ******************************************************************************/
+
+/*******************************************************************************
+ * Variables
+ ******************************************************************************/
+flexcan_handle_t flexcanHandle;
+volatile bool txComplete = false;
+volatile bool rxComplete = false;
+volatile bool wakenUp    = false;
+flexcan_mb_transfer_t txXfer, rxXfer;
+#if (defined(USE_CANFD) && USE_CANFD)
+flexcan_fd_frame_t frame;
+#else
+flexcan_frame_t frame;
+#endif
+flexcan_rx_mb_config_t mbConfig;
+typedef struct {
+    struct
+    {
+        uint8_t  mode;   // 工作模式 (索引 0x6060, 1 字节)
+        uint16_t ctrl;   // 控制字   (索引 0x6040, 2 字节)
+        int32_t speed;  // 目标速度 (索引 0xFF60, 4 字节)
+    };
+    union
+    {
+        struct
+        {
+            uint64_t data; /*!< CAN Frame data */
+        };
+        struct
+        {
+            uint8_t dataByte0; /*!< CAN Frame payload byte0. */
+            uint8_t dataByte1; /*!< CAN Frame payload byte1. */
+            uint8_t dataByte2; /*!< CAN Frame payload byte2. */
+            uint8_t dataByte3; /*!< CAN Frame payload byte3. */
+            uint8_t dataByte4; /*!< CAN Frame payload byte4. */
+            uint8_t dataByte5; /*!< CAN Frame payload byte5. */
+            uint8_t dataByte6; /*!< CAN Frame payload byte6. */
+            uint8_t dataByte7; /*!< CAN Frame payload byte7. */
+        };
+    };
+} PDOData_t;
+PDOData_t pdodata;
+void CAN_StartReceive(uint32_t id);
+void CAN_WaitReceive(void);
+void sendPDOData(uint8_t nodeId, PDOData_t *pdoData);
+/*******************************************************************************
+ * Code
+ ******************************************************************************/
+
+/**
+ * @brief  CAN发送函数
+ * 
+ * @param[in]  data 发送的报文数据
+ * @param[in]  id   发送的id     
+ * @param[in]  length   发送的数据长度
+ * 
+ * 
+ * @return 无
+ * 
+ * @note  数据为64位，8字节
+ * 
+ */
+/**
+ * @brief 发送一帧标准 CAN 报文。
+ * @param[in] id 标准帧 ID。
+ * @param[in] data 64 位报文数据。
+ * @param[in] length 本次发送的数据长度，单位为字节。
+ * @note 本函数会阻塞等待发送完成。
+ */
+void CAN_Send(uint32_t id, uint64_t data, uint8_t length)
+{
+    frame.id     = FLEXCAN_ID_STD(id);
+    txXfer.mbIdx = (uint8_t)TX_MESSAGE_BUFFER_NUM;
+    frame.length = length;           // 由调用者指定长度
+    frame.type   = 0;                // 数据帧
+    frame.format = 0;                // 标准格式
+    frame.data   = data;             // 如果 length < 8，高位数据无效
+    txXfer.frame = &frame;
+    (void)FLEXCAN_TransferSendNonBlocking(EXAMPLE_CAN, &flexcanHandle, &txXfer);
+    while (!txComplete);
+    txComplete = false;
+}
+
+/**
+ * @brief 发起一次 SDO 读请求。
+ * @param[in] nodeId 节点 ID。
+ * @param[in] index 对象索引。
+ * @param[in] subindex 子索引。
+ * @return 按 32 位无符号数解析的返回值。
+ */
+uint32_t SDO_ReadU32(uint8_t nodeId, uint16_t index, uint8_t subindex)
+{
+    uint64_t value;
+
+    value = ((uint64_t)subindex) |
+            ((uint64_t)((index >> 8) & 0xFF) << 8) |
+            ((uint64_t)(index & 0xFF) << 16) |
+            ((uint64_t)0x40 << 24);
+
+    CAN_StartReceive(0x580 + nodeId);
+    CAN_Send(0x600 + nodeId, value, 8);
+    CAN_WaitReceive();
+
+    return ((uint32_t)frame.dataByte7) |
+           ((uint32_t)frame.dataByte6 << 8) |
+           ((uint32_t)frame.dataByte5 << 16) |
+           ((uint32_t)frame.dataByte4 << 24);
+}
+
+/**
+ * @brief 填充 RPDO 发送结构。
+ * @param[out] pdoData RPDO 数据结构。
+ * @param[in] mode 运行模式。
+ * @param[in] ctrl 控制字。
+ * @param[in] speed 目标速度。
+ */
+static void FillPDOData(PDOData_t *pdoData, uint8_t mode, uint16_t ctrl, int32_t speed)
+{
+    pdoData->mode  = mode;
+    pdoData->ctrl  = ctrl;
+    pdoData->speed = speed;
+}
+
+/**
+ * @brief 判断驱动器是否已进入 Operation Enabled。
+ * @param[in] statusWord 0x6041 状态字。
+ * @return true 表示已进入使能运行态。
+ */
+static bool IsServoOperationEnabled(uint16_t statusWord)
+{
+    return (statusWord & STATUS_WORD_OPERATION_ENABLED_MASK) == STATUS_WORD_OPERATION_ENABLED_VALUE;
+}
+
+/**
+ * @brief 回读 0x6041 状态字。
+ * @param[in] nodeId 节点 ID。
+ * @return 16 位状态字。
+ */
+static uint16_t ReadStatusWord(uint8_t nodeId)
+{
+    return (uint16_t)(SDO_ReadU32(nodeId, 0x6041, 0x00) & 0xFFFFU);
+}
+
+/**
+ * @brief 通过少量 SDO 回读确认当前驱动状态。
+ * @param[in] nodeId 节点 ID。
+ * @param[in] tag 当前阶段标签，用于日志打印。
+ * @param[in] expectEnabled 是否期望当前已进入 Operation Enabled。
+ */
+static void VerifyServoStateBySDO(uint8_t nodeId, const char *tag, bool expectEnabled)
+{
+    uint32_t modeDisplay = SDO_ReadU32(nodeId, 0x6061, 0x00);
+    uint16_t statusWord  = ReadStatusWord(nodeId);
+    int32_t actualSpeed  = (int32_t)SDO_ReadU32(nodeId, 0x606C, 0x00);
+
+    LOG_INFO("%s: modeDisplay=%d status=0x%04X actualSpeed=%d\r\n",
+             tag,
+             (int8_t)(modeDisplay & 0xFFU),
+             statusWord,
+             actualSpeed);
+
+    if (expectEnabled && !IsServoOperationEnabled(statusWord))
+    {
+        LOG_INFO("%s: warning, servo is not in Operation Enabled state yet\r\n", tag);
+    }
+}
+
+/**
+ * @brief 打印运行期反馈信息。
+ * @param[in] nodeId 节点 ID。
+ * @param[in] tag 日志标签。
+ */
+void LogPDOFeedback(uint8_t nodeId, const char *tag)
+{
+    VerifyServoStateBySDO(nodeId, tag, false);
+}
+
+/**
+ * @brief 启动 CAN 接收（非阻塞），配置 MB 为指定 ID
+ * @param id 期望接收的 ID（标准格式）
+ */
+/**
+ * @brief 启动一次 CAN 接收。
+ * @param[in] id 期望接收的标准帧 ID。
+ * @note 会重新配置接收邮箱，只接收该 ID 的报文。
+ */
+void CAN_StartReceive(uint32_t id)
+{
+    /* 中止当前可能正在进行的接收（针对同一个 MB） */
+    FLEXCAN_TransferAbortReceive(EXAMPLE_CAN, &flexcanHandle, RX_MESSAGE_BUFFER_NUM);
+
+    /* 更新全局掩码：仅允许匹配该 ID 的报文进入 */
+    FLEXCAN_SetRxMbGlobalMask(EXAMPLE_CAN, FLEXCAN_RX_MB_STD_MASK(id, 0, 0));
+
+    /* 重新配置 Rx Message Buffer */
+    mbConfig.format = kFLEXCAN_FrameFormatStandard;
+    mbConfig.type   = kFLEXCAN_FrameTypeData;
+    mbConfig.id     = FLEXCAN_ID_STD(id);
+    FLEXCAN_SetRxMbConfig(EXAMPLE_CAN, RX_MESSAGE_BUFFER_NUM, &mbConfig, true);
+
+    /* 启动非阻塞接收 */
+    rxXfer.mbIdx = (uint8_t)RX_MESSAGE_BUFFER_NUM;
+    rxXfer.frame = &frame;
+    (void)FLEXCAN_TransferReceiveNonBlocking(EXAMPLE_CAN, &flexcanHandle, &rxXfer);
+}
+
+/**
+ * @brief 等待接收完成，并打印接收到的帧信息
+ */
+/**
+ * @brief 阻塞等待接收完成，并打印收到的 CAN 报文。
+ */
+void CAN_WaitReceive(void)
+{
+    while (!rxComplete)
+    {
+    }
+    rxComplete = false;
+
+    LOG_INFO("Rx MB ID: 0x%3x, Rx MB data: 0x%02X%02X%02X%02X%02X%02X%02X%02X, Time stamp: %d\r\n",
+             (frame.id >> CAN_ID_STD_SHIFT),  
+              frame.dataByte3,  frame.dataByte2,  frame.dataByte1,  frame.dataByte0,
+              frame.dataByte7,  frame.dataByte6,  frame.dataByte5,  frame.dataByte4, frame.timestamp);
+}
+
+
+/**
+ * @brief SDO报文发收函数
+ *
+ * @param[in] nodeId 设备ID
+ * @param[in] index 对象索引
+ * @param[in] subindex 对象子索引
+ * @param[in] data 数据
+ * @param[in] dataSize 数据字节长度
+ * 
+ * @return 无
+ * 
+ * @note 数据字节长度只能选择1 2 4 
+ *       对象索引2字节
+ *       对象子索引1字节
+ */
+/**
+ * @brief 发起一次 SDO 写请求。
+ * @param[in] nodeId 节点 ID。
+ * @param[in] index 对象索引。
+ * @param[in] subindex 子索引。
+ * @param[in] data 要写入的数据。
+ * @param[in] dataSize 数据长度，只支持 1、2、4 字节。
+ */
+void SDO_Write(uint8_t nodeId, uint16_t index, uint8_t subindex, uint32_t data, uint8_t dataSize)
+{
+    uint8_t cs;
+    uint64_t value;
+    // 根据数据长度选择命令码并截断数据
+    if (dataSize == 1) {
+        cs = 0x2F;
+        data &= 0xFF;          // 仅保留低8位
+    } else if (dataSize == 2) {
+        cs = 0x2B;
+        data &= 0xFFFF;        // 仅保留低16位
+    } else if (dataSize == 4) {
+        cs = 0x23;
+        // data 全部有效，无需截断
+    } else {
+        // 处理异常长度（可根据需要添加错误处理，此处默认使用4字节命令）
+        cs = 0x23;
+    }
+
+    // 构造 64 位 CAN 数据域（小端序）：
+    // 字节4~7：数据小端（data 的 4 个字节，未用字节自动为0）
+    // 字节3   ：命令码 cs
+    // 字节2   ：索引高字节 ((index >> 8) & 0xFF)
+    // 字节1   ：索引低字节 (index & 0xFF)
+    // 字节0   ：子索引 subindex
+    value = ((uint64_t)subindex) |
+            ((uint64_t)((index >> 8) & 0xFF) << 8) |
+            ((uint64_t)(index & 0xFF) << 16) |
+            ((uint64_t)cs << 24) |
+            ((uint64_t)((data >> 24) & 0xFF) << 32) |
+            ((uint64_t)((data >> 16) & 0xFF) << 40) |
+            ((uint64_t)((data >> 8)  & 0xFF) << 48) |
+            ((uint64_t)(data & 0xFF) << 56);
+
+    // 启动接收 SDO 响应（从节点地址 0x580 + nodeId）
+    CAN_StartReceive(0x580 + nodeId);
+
+    // 发送 SDO 请求（到节点地址 0x600 + nodeId）
+    CAN_Send(0x600 + nodeId, value, 8);
+
+    // 等待响应（注意：实际使用中建议加入超时机制）
+    CAN_WaitReceive();
+}
+
+/**
+ * @brief  工作模式设置函数
+ * 
+ * @param[in]  data 1 位置模式
+ *                  3 速度模式
+ * 
+ * 
+ * @return 无
+ * 
+ * @note  data目前只能输入正整数
+ * 
+ */
+/**
+ * @brief 通过 SDO 设置运行模式。
+ * @param[in] data 模式值，例如 0x03 表示速度模式。
+ */
+void Direct_SetAType(uint8_t data)
+{
+    SDO_Write(1, 0x6060, 0x00, data, 1);
+}
+ 
+/**
+ * @brief  目标速度设置函数
+ * 
+ * @param[in]  speed 单位为EDC，正负均可
+ * 
+ * @return 无
+ * 
+ * @note  无
+ * 
+ */
+/**
+ * @brief 通过 SDO 设置目标速度对象 0x60FF。
+ * @param[in] speed 目标速度。
+ */
+void Direct_SetSingleParam(int32_t speed)
+{
+    // 将 int32_t 转换为无符号 32 位，保持原补码位模式
+    uint32_t uspeed = (uint32_t)speed;
+
+    SDO_Write(1, 0x60FF, 0x00, uspeed, 4);
+}
+
+/**
+ * @brief  伺服驱动器控制字启动函数
+ * 
+ * 
+ * @return 无
+ * 
+ * @note  无
+ * 
+ */
+/**
+ * @brief 通过 SDO 依次发送 0x06、0x07、0x0F 完成驱动使能。
+ */
+void Direct_SetAxisEnable(void)
+{
+    SDO_Write(1, 0x6040, 0x00, 0x06, 2);
+    SDK_DelayAtLeastUs(1000000, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+    SDO_Write(1, 0x6040, 0x00, 0x07, 2);
+    SDK_DelayAtLeastUs(1000000, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+    SDO_Write(1, 0x6040, 0x00, 0x0F, 2);
+}
+
+/**
+ * @brief  加速度设置函数
+ * 
+ * @param[in]  accSpeed 加速度值，单位为EDC
+ * 
+ * @return 无
+ * 
+ * @note  加速度值为正整数
+ * 
+ */
+/**
+ * @brief 通过 SDO 设置加速度对象 0x6083。
+ * @param[in] accSpeed 加速度。
+ */
+void Direct_SetAccel(uint32_t accSpeed)
+{
+    SDO_Write(1, 0x6083, 0x00, accSpeed, 4);
+}
+
+/**
+ * @brief  减速度设置函数
+ * 
+ * @param[in]  decSpeed 减速度值，单位为EDC
+ * 
+ * @return 无
+ * 
+ * @note  减速度值为正整数
+ * 
+ */
+/**
+ * @brief 通过 SDO 设置减速度对象 0x6084。
+ * @param[in] decSpeed 减速度。
+ */
+void Direct_SetDecel(uint32_t decSpeed)
+{
+    SDO_Write(1, 0x6084, 0x00, decSpeed, 4);
+}
+
+/**
+ * @brief  清除 RPDO1 原有映射
+ * 
+ * @param[in]  nodeId 设备ID
+ * 
+ * @return 无
+ * 
+ * @note  无
+ * 
+ */
+/**
+ * @brief 清空 RPDO1 映射数量。
+ * @param[in] nodeId 节点 ID。
+ */
+void clearRPDO1Mapping(uint8_t nodeId)
+{
+    SDO_Write(nodeId, 0x1600, 0x00, 0x00, 1);
+}
+
+/**
+ * @brief  配置 RPDO1 映射参数
+ * 
+ * @param[in]  nodeId 设备ID
+ * 
+ * @return 无
+ * 
+ * @note  无
+ * 
+ */
+/**
+ * @brief 配置 RPDO1 映射内容。
+ * @param[in] nodeId 节点 ID。
+ * @note 当前映射为 6060 模式、6040 控制字、60FF 目标速度。
+ */
+void configureRPDO1Mapping(uint8_t nodeId)
+{
+    SDO_Write(nodeId, 0x1600, 0x01, 0x60600008, 4);
+    SDO_Write(nodeId, 0x1600, 0x02, 0x60400010, 4);
+    SDO_Write(nodeId, 0x1600, 0x03, 0x60FF0020, 4);
+}
+
+/**
+ * @brief  设置 RPDO1 映射数量
+ * 
+ * @param[in]  nodeId 设备ID
+ * 
+ * @return 无
+ * 
+ * @note  无
+ * 
+ */
+/**
+ * @brief 设置 RPDO1 映射数量。
+ * @param[in] nodeId 节点 ID。
+ */
+void SetRPDO1MappingNumber(uint8_t nodeId)
+{
+    SDO_Write(nodeId, 0x1600, 0x00, 0x03, 1);
+}
+
+/**
+ * @brief 配置 RPDO1 通信参数。
+ * @param[in] nodeId 节点 ID。
+ * @note 启用的 COB-ID 为 0x200 + nodeId。
+ */
+void configureRPDO1Communication(uint8_t nodeId)
+{
+    SDO_Write(nodeId, 0x1400, 0x01, (uint32_t)(0x80000000U | (0x200U + nodeId)), 4);
+    SDO_Write(nodeId, 0x1400, 0x02, 255, 1);
+    SDO_Write(nodeId, 0x1400, 0x01, (uint32_t)(0x200U + nodeId), 4);
+}
+
+/**
+ * @brief  发送 NMT 启动指定节点的命令
+ * 
+ * @param  nodeId  要启动的节点 ID（范围 1~127）
+ * 
+ * @return 无
+ * 
+ * @note  节点 ID 为 0 时表示启动所有节点
+ * 
+ */
+/**
+ * @brief 发送 NMT Start 命令。
+ * @param[in] nodeId 节点 ID。
+ */
+void sendNMTStartNodeCommand(uint8_t nodeId)
+{
+    CAN_Send(0x000, (((uint64_t)0x01) | ((uint64_t)nodeId << 8)) << 16, 8);
+}
+/**
+ * @brief  发送 PDO 数据
+ * 
+ * @param[in]  pdoData 工作模式 控制字 目标速度结构体
+ * 
+ * @note  无
+ * 
+ */
+/**
+ * @brief 打包并发送一帧 RPDO1。
+ * @param[in] nodeId 节点 ID。
+ * @param[in,out] pdoData 要发送的 RPDO 数据结构。
+ */
+void sendPDOData(uint8_t nodeId, PDOData_t *pdoData)
+{
+    static bool firstLog      = true;
+    static uint8_t lastNodeId = 0U;
+    static uint8_t lastMode   = 0U;
+    static uint16_t lastCtrl  = 0U;
+    static int32_t lastSpeed  = 0;
+
+    pdoData->dataByte0 = (uint32_t)pdoData->speed & 0xFF;
+    pdoData->dataByte1 = pdoData->ctrl >> 8;
+    pdoData->dataByte2 = pdoData->ctrl & 0xFF;
+    pdoData->dataByte3 = pdoData->mode;
+    pdoData->dataByte4 = 0x00;//
+    pdoData->dataByte5 = ((uint32_t)pdoData->speed >> 24) & 0xFF;
+    pdoData->dataByte6 = ((uint32_t)pdoData->speed >> 16) & 0xFF;
+    pdoData->dataByte7 = ((uint32_t)pdoData->speed >> 8) & 0xFF;
+
+    CAN_Send(RPDO1_BASE_COB_ID + nodeId, pdoData->data, 8);
+    if (firstLog || (lastNodeId != nodeId) || (lastMode != pdoData->mode) || (lastCtrl != pdoData->ctrl) || (lastSpeed != pdoData->speed))
+    {
+        LOG_INFO("RPDO1 sent: mode=0x%02X ctrl=0x%04X speed=%d raw=0x%02X%02X%02X%02X%02X%02X%02X%02X\r\n",
+                 pdoData->mode,
+                 pdoData->ctrl,
+                 pdoData->speed,
+                 pdoData->dataByte7, pdoData->dataByte6, pdoData->dataByte5, pdoData->dataByte4,
+                 pdoData->dataByte3, pdoData->dataByte2, pdoData->dataByte1, pdoData->dataByte0);
+        firstLog = false;
+        lastNodeId = nodeId;
+        lastMode = pdoData->mode;
+        lastCtrl = pdoData->ctrl;
+        lastSpeed = pdoData->speed;
+    }
+}
+
+/**
+ * @brief 以固定周期重复发送同一组 RPDO。
+ * @param[in] nodeId 节点 ID。
+ * @param[in,out] pdoData 要重复发送的 RPDO 数据结构。
+ * @param[in] repeatCount 重复发送次数。
+ * @param[in] periodUs 两次发送之间的延时，单位为微秒。
+ */
+static void SendRPDORepeated(uint8_t nodeId, PDOData_t *pdoData, uint32_t repeatCount, uint32_t periodUs)
+{
+    uint32_t i;
+
+    for (i = 0; i < repeatCount; i++)
+    {
+        sendPDOData(nodeId, pdoData);
+        SDK_DelayAtLeastUs(periodUs, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+    }
+}
+
+/**
+ * @brief  SDO启动伺服电机
+ * 
+ * 
+ * @note  无
+ * 
+ */
+/**
+ * @brief 传统的纯 SDO 启动流程。
+ * @note 该函数保留作为对照和调试用途。
+ */
+void SDO_StartServoMotor(void)
+{
+    Direct_SetAType(3);//设置速度模式
+    Direct_SetSingleParam(1000000);//设置目标速度
+    Direct_SetAccel(2000000);//设置加速度
+    Direct_SetDecel(2000000);//设置减速度
+    Direct_SetAxisEnable();//设置控制字
+}
+
+/**
+ * @brief  PDO启动伺服电机
+ * 
+ * @param[in]  nodeId 设备ID
+ * 
+ * @note  无
+ * 
+ */
+/**
+ * @brief 正式的 RPDO 启动流程。
+ * @param[in] nodeId 节点 ID。
+ * @note 启动阶段使用 RPDO 下发 0x06、0x07、0x0F，
+ *       中间穿插少量 SDO 回读确认状态；运行期控制字固定保持 0x0F。
+ */
+void PDO_StartServoMotor(uint8_t nodeId)
+{
+    uint32_t runtimeCounter = 0U;
+
+    FillPDOData(&pdodata, SERVO_MODE_VELOCITY, CTRL_WORD_SHUTDOWN, 1000000);
+
+    clearRPDO1Mapping(nodeId);
+    configureRPDO1Mapping(nodeId);
+    SetRPDO1MappingNumber(nodeId);
+    configureRPDO1Communication(nodeId);
+    sendNMTStartNodeCommand(nodeId);
+    SDK_DelayAtLeastUs(50000U, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+
+    SendRPDORepeated(nodeId, &pdodata, 8U, PDO_STARTUP_PERIOD_US);
+    VerifyServoStateBySDO(nodeId, "After shutdown", false);
+
+    FillPDOData(&pdodata, SERVO_MODE_VELOCITY, CTRL_WORD_SWITCH_ON, 1000000);
+    SendRPDORepeated(nodeId, &pdodata, 8U, PDO_STARTUP_PERIOD_US);
+    VerifyServoStateBySDO(nodeId, "After switch on", false);
+
+    FillPDOData(&pdodata, SERVO_MODE_VELOCITY, CTRL_WORD_ENABLE_OPERATION, 1000000);
+    SendRPDORepeated(nodeId, &pdodata, 12U, PDO_STARTUP_PERIOD_US);
+    VerifyServoStateBySDO(nodeId, "After enable operation", true);
+
+    if (!IsServoOperationEnabled(ReadStatusWord(nodeId)))
+    {
+        SendRPDORepeated(nodeId, &pdodata, 12U, PDO_STARTUP_PERIOD_US);
+        VerifyServoStateBySDO(nodeId, "Retry enable operation", true);
+    }
+
+    while (true)
+    {
+        sendPDOData(nodeId, &pdodata);
+        SDK_DelayAtLeastUs(PDO_STARTUP_PERIOD_US, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+
+        runtimeCounter++;
+        if (runtimeCounter >= PDO_RUNTIME_FEEDBACK_CYCLES)
+        {
+            runtimeCounter = 0U;
+            LogPDOFeedback(nodeId, "Runtime feedback");
+        }
+    }
+
+    static unsigned char value = 0;
+    //配置RPDO数据
+    pdodata.mode = 0x03;
+    pdodata.ctrl = 0x06;
+    pdodata.speed = 1000000;
+
+    // 配置RPDO映射和NMT启动
+    clearRPDO1Mapping(nodeId);
+    configureRPDO1Mapping(nodeId);
+    SetRPDO1MappingNumber(nodeId);
+    sendNMTStartNodeCommand(nodeId);
+
+    /* 主循环：周期性发送 PDO 数据 */
+    while (true)
+    {
+        value ++;
+        if(value == 1)
+        {
+            pdodata.ctrl = 0x06;
+        }
+        else if(value == 80)
+        {
+            pdodata.ctrl = 0x07;
+        }
+        else if(value == 160)
+        { 
+            pdodata.ctrl = 0x0F;
+        }
+        else if(value >= 165)
+        {
+            value = 165;
+        }
+
+        sendPDOData(nodeId, &pdodata);             // 发送 PDO 数据 (ID 0x201, 固定数据)
+        
+        /* 根据需求设定发送周期，例如每 8ms 发送一次 */
+        SDK_DelayAtLeastUs(8000, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+    }
+}
+
+/**
+ * @brief 配置 TPDO1 映射（状态字6041h + 实际位置6064h）并设置周期发送
+ * @param nodeId   节点ID（默认1）
+ * @param periodMs 发送周期（毫秒），建议≥10ms
+ */
+/**
+ * @brief 配置 TPDO1 的映射与发送方式。
+ * @param[in] nodeId 节点 ID。
+ * @param[in] periodMs 事件定时发送周期，单位为毫秒。
+ */
+void configureTPDO1(uint8_t nodeId, uint16_t periodMs)
+{
+    // 1. 清除现有TPDO1映射（子索引0写0）
+    SDO_Write(nodeId, 0x1A00, 0x00, 0, 1);          // 映射数量置0
+
+    // 2. 写入映射条目（32位小端数值：索引+子索引+长度）
+    // 状态字 6041h sub0 16位 → 0x60410010
+    // 实际位置 6064h sub0 32位 → 0x60640020
+    SDO_Write(nodeId, 0x1A00, 0x01, 0x60410010, 4); // 条目1：状态字
+    SDO_Write(nodeId, 0x1A00, 0x02, 0x60640020, 4); // 条目2：实际位置
+
+    // 3. 设置映射数量（2个对象）
+    SDO_Write(nodeId, 0x1A00, 0x00, 2, 1);
+
+    // 4. 配置TPDO通信参数（索引0x1800）
+    // 子索引2：传输类型，255 = 异步（由事件时间控制周期）
+    SDO_Write(nodeId, 0x1800, 0x02, 1, 1);
+    // 子索引5：事件时间（单位1ms），例如10ms
+    //SDO_Write(nodeId, 0x1800, 0x05, periodMs, 2);
+    // 子索引3：禁止时间（可选，最小间隔，单位100μs），可不设置
+
+    // 发送NMT启动命令，使节点1进入Operational状态
+    sendNMTStartNodeCommand(1);
+
+}
+
+/*!
+ * @brief FlexCAN Call Back function
+ */
+/**
+ * @brief FlexCAN 中断回调。
+ * @note 仅更新发送完成、接收完成和唤醒标志位。
+ */
+static FLEXCAN_CALLBACK(flexcan_callback)
+{
+    switch (status)
+    {
+        case kStatus_FLEXCAN_RxIdle:
+            if (RX_MESSAGE_BUFFER_NUM == result)
+            {
+                rxComplete = true;
+            }
+            break;
+
+        case kStatus_FLEXCAN_TxIdle:
+            if (TX_MESSAGE_BUFFER_NUM == result)
+            {
+                txComplete = true;
+            }
+            break;
+
+        case kStatus_FLEXCAN_WakeUp:
+            wakenUp = true;
+            break;
+
+        default:
+            break;
+    }
+}
+
+/*!
+ * @brief Main function
+ */
+/**
+ * @brief 程序入口。
+ * @return 程序理论上不会返回。
+ */
+int main(void)
+{
+    flexcan_config_t flexcanConfig;
+    
+    
+    /* Initialize board hardware. */
+    /* M7 has its local cache and enabled by default,
+     * need to set smart subsystems (0x28000000 ~ 0x3FFFFFFF)
+     * non-cacheable before accessing this address region */
+    BOARD_InitMemory();
+
+    /* Board specific RDC settings */
+    BOARD_RdcInit();
+
+    BOARD_InitBootPins();
+    BOARD_BootClockRUN();
+    BOARD_InitDebugConsole();
+
+    CLOCK_SetRootMux(kCLOCK_RootFlexCan1, kCLOCK_FlexCanRootmuxSysPll1); /* Set FLEXCAN1 source to SYSTEM PLL1 800MHZ */
+    CLOCK_SetRootDivider(kCLOCK_RootFlexCan1, 2U, 5U);                   /* Set root clock to 800MHZ / 10 = 80MHZ */
+    LOG_INFO("********* FLEXCAN Interrupt EXAMPLE *********\r\n");
+    /* GPIO5_IO05 is used to control CAN1_STBY which is ebaled active high */
+    gpio_pin_config_t config = {kGPIO_DigitalOutput, 1, kGPIO_NoIntmode};
+    GPIO_PinInit(GPIO5, 5U, &config);
+
+    LOG_INFO("********* FLEXCAN Interrupt EXAMPLE *********\r\n");
+    LOG_INFO("    Message format: Standard (11 bit id)\r\n");
+    LOG_INFO("    Message buffer %d used for Rx.\r\n", RX_MESSAGE_BUFFER_NUM);
+    LOG_INFO("    Message buffer %d used for Tx.\r\n", TX_MESSAGE_BUFFER_NUM);
+    LOG_INFO("    Interrupt Mode: Enabled\r\n");
+    LOG_INFO("    Operation Mode: TX and RX --> Normal\r\n");
+    LOG_INFO("*********************************************\r\n\r\n");
+
+    /* Get FlexCAN module default Configuration. */
+    /*
+     * flexcanConfig.clkSrc                 = kFLEXCAN_ClkSrc0;
+     * flexcanConfig.bitRate               = 1000000U;
+     * flexcanConfig.bitRateFD             = 2000000U;
+     * flexcanConfig.maxMbNum               = 16;
+     * flexcanConfig.enableLoopBack         = false;
+     * flexcanConfig.enableSelfWakeup       = false;
+     * flexcanConfig.enableIndividMask      = false;
+     * flexcanConfig.disableSelfReception   = false;
+     * flexcanConfig.enableListenOnlyMode   = false;
+     * flexcanConfig.enableDoze             = false;
+     */
+    FLEXCAN_GetDefaultConfig(&flexcanConfig);
+
+
+#if (defined(USE_IMPROVED_TIMING_CONFIG) && USE_IMPROVED_TIMING_CONFIG)
+    flexcan_timing_config_t timing_config;
+    memset(&timing_config, 0, sizeof(flexcan_timing_config_t));
+    if (FLEXCAN_CalculateImprovedTimingValues(EXAMPLE_CAN, flexcanConfig.bitRate, EXAMPLE_CAN_CLK_FREQ, &timing_config))
+    {
+        /* Update the improved timing configuration*/
+        memcpy(&(flexcanConfig.timingConfig), &timing_config, sizeof(flexcan_timing_config_t));
+    }
+    else
+    {
+        LOG_INFO("No found Improved Timing Configuration. Just used default configuration\r\n\r\n");
+    }
+#endif
+
+    FLEXCAN_Init(EXAMPLE_CAN, &flexcanConfig, EXAMPLE_CAN_CLK_FREQ);
+
+    /* Create FlexCAN handle structure and set call back function. */
+    FLEXCAN_TransferCreateHandle(EXAMPLE_CAN, &flexcanHandle, flexcan_callback, NULL);
+
+    /* Setup Tx Message Buffer. */
+
+    FLEXCAN_SetTxMbConfig(EXAMPLE_CAN, TX_MESSAGE_BUFFER_NUM, true);
+
+    LOG_INFO("Start servo by RPDO1 only\r\n\r\n");
+
+    PDO_StartServoMotor(1);
+
+}
