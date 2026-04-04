@@ -115,3 +115,4 @@ class ToolExecutionResult:
     stdout: str
     stderr: str
     risk_level: str
+    parsed_output: dict[str, Any] = field(default_factory=dict)

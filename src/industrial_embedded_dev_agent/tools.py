@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import asdict
 from pathlib import Path
@@ -83,7 +84,7 @@ def plan_tool_request(root: Path, request: str, *, tool_id: str | None = None) -
             allowed_to_execute=False,
             requires_confirmation=True,
             should_refuse=True,
-            command_preview=_build_command_preview(root, tool) if tool else [],
+            command_preview=_build_command_preview(tool) if tool else [],
             reason="Request crosses the current L2 execution boundary and must stay manual.",
             evidence=diagnosis.evidence,
         )
@@ -103,11 +104,11 @@ def plan_tool_request(root: Path, request: str, *, tool_id: str | None = None) -
             evidence=diagnosis.evidence,
         )
 
-    effective_risk = _effective_tool_risk(request, diagnosis, tool)
+    effective_risk = _effective_tool_risk(request, tool)
     effective_summary = _effective_tool_summary(request, diagnosis, tool)
     requires_confirmation = effective_risk not in SAFE_EXECUTION_RISKS
     allowed_to_execute = effective_risk in SAFE_EXECUTION_RISKS and Path(tool.source_script).exists()
-    reason = _tool_plan_reason(tool, diagnosis, request, allowed_to_execute, requires_confirmation, effective_risk)
+    reason = _tool_plan_reason(tool, request, allowed_to_execute, requires_confirmation, effective_risk)
     return ToolPlan(
         request=request,
         summary=effective_summary,
@@ -117,7 +118,7 @@ def plan_tool_request(root: Path, request: str, *, tool_id: str | None = None) -
         allowed_to_execute=allowed_to_execute,
         requires_confirmation=requires_confirmation,
         should_refuse=False,
-        command_preview=_build_command_preview(root, tool),
+        command_preview=_build_command_preview(tool),
         reason=reason,
         evidence=diagnosis.evidence,
     )
@@ -133,6 +134,7 @@ def run_tool_request(
 ) -> dict[str, object]:
     plan = plan_tool_request(root, request, tool_id=tool_id)
     payload: dict[str, object] = {"plan": asdict(plan)}
+
     if not execute:
         payload["execution"] = asdict(
             ToolExecutionResult(
@@ -143,6 +145,7 @@ def run_tool_request(
                 stdout="",
                 stderr="Execution skipped. Re-run with --execute to actually invoke the tool.",
                 risk_level=plan.risk_level,
+                parsed_output={"status": "skipped"},
             )
         )
         return payload
@@ -157,15 +160,17 @@ def run_tool_request(
                 stdout="",
                 stderr=plan.reason,
                 risk_level=plan.risk_level,
+                parsed_output={"status": "blocked", "reason": plan.reason},
             )
         )
         return payload
 
     registry = {tool.tool_id: tool for tool in build_tool_registry(root)}
     tool = registry[plan.tool_id]
-    command = _build_command_preview(root, tool)
+    command = _build_command_preview(tool)
     env = os.environ.copy()
     env.update(tool.default_env)
+
     try:
         completed = subprocess.run(
             command,
@@ -174,16 +179,19 @@ def run_tool_request(
             capture_output=True,
             timeout=timeout_seconds,
         )
+        stdout_text = _decode_output(completed.stdout)[-4000:]
+        stderr_text = _decode_output(completed.stderr)[-4000:]
         execution = ToolExecutionResult(
             tool_id=tool.tool_id,
             command=command,
             executed=True,
             returncode=completed.returncode,
-            stdout=_decode_output(completed.stdout)[-4000:],
-            stderr=_decode_output(completed.stderr)[-4000:],
-            risk_level=tool.risk_level,
+            stdout=stdout_text,
+            stderr=stderr_text,
+            risk_level=plan.risk_level,
+            parsed_output=_parse_execution_output(tool.tool_id, stdout_text, stderr_text, completed.returncode),
         )
-    except Exception as exc:  # pragma: no cover - defensive wrapper
+    except Exception as exc:  # pragma: no cover
         execution = ToolExecutionResult(
             tool_id=tool.tool_id,
             command=command,
@@ -191,15 +199,19 @@ def run_tool_request(
             returncode=None,
             stdout="",
             stderr=str(exc),
-            risk_level=tool.risk_level,
+            risk_level=plan.risk_level,
+            parsed_output={"status": "execution_error", "error": str(exc)},
         )
+
     payload["execution"] = asdict(execution)
     return payload
 
 
 def _select_tool(request: str, diagnosis, registry: dict[str, ToolSpec]) -> ToolSpec | None:
     normalized = request.lower()
-    if any(token in normalized for token in ["heartbeat", "快照", "状态快照", "错误码", "状态字", "编码器", "只读"]):
+    if any(token in normalized for token in ["heartbeat", "snapshot", "readonly"]) or any(
+        token in request for token in ["快照", "状态快照", "错误码", "状态字", "编码器", "只读"]
+    ):
         return registry.get("SCRIPT-004")
     if "tmp_probe_can_heartbeat.py" in normalized:
         return registry.get("SCRIPT-004")
@@ -218,7 +230,6 @@ def _select_tool(request: str, diagnosis, registry: dict[str, ToolSpec]) -> Tool
 
 def _tool_plan_reason(
     tool: ToolSpec,
-    diagnosis,
     request: str,
     allowed_to_execute: bool,
     requires_confirmation: bool,
@@ -240,7 +251,7 @@ def _tool_plan_reason(
     return f"{tool.tool_id} matches the request, but current policy keeps it blocked."
 
 
-def _build_command_preview(root: Path, tool: ToolSpec) -> list[str]:
+def _build_command_preview(tool: ToolSpec) -> list[str]:
     script_path = Path(tool.source_script)
     if tool.executor == "wsl_python":
         return ["wsl.exe", "python3", _to_wsl_path(script_path), *tool.default_args]
@@ -269,7 +280,7 @@ def _decode_output(payload: bytes) -> str:
     return payload.decode("utf-8", errors="replace")
 
 
-def _effective_tool_risk(request: str, diagnosis, tool: ToolSpec) -> str:
+def _effective_tool_risk(request: str, tool: ToolSpec) -> str:
     if tool.tool_id == "SCRIPT-004" and any(token in request for token in ["状态字", "编码器", "错误码", "只读"]):
         return "L0_readonly"
     if tool.tool_id == "SCRIPT-004":
@@ -286,3 +297,70 @@ def _effective_tool_summary(request: str, diagnosis, tool: ToolSpec) -> str:
     ):
         return "这是低风险采集请求，适合运行状态快照工具后汇总结果。"
     return diagnosis.summary
+
+
+def _parse_execution_output(tool_id: str, stdout: str, stderr: str, returncode: int | None) -> dict[str, object]:
+    if tool_id == "SCRIPT-004":
+        return _parse_probe_can_heartbeat(stdout, stderr, returncode)
+    return _parse_generic_output(stdout, stderr, returncode)
+
+
+def _parse_probe_can_heartbeat(stdout: str, stderr: str, returncode: int | None) -> dict[str, object]:
+    if returncode not in (0, None):
+        if "/home/librobot.so.1.0.0" in stderr:
+            return {
+                "status": "environment_error",
+                "summary": "WSL 侧缺少 /home/librobot.so.1.0.0，当前无法真正执行 heartbeat 探针。",
+                "error_type": "missing_shared_library",
+            }
+        return {
+            "status": "execution_failed",
+            "summary": "heartbeat 探针执行失败，请查看 stderr。",
+        }
+
+    open_rpmsg_match = re.search(r"OpenRpmsg\s+(-?\d+)", stdout)
+    poll_numbers = [int(match) for match in re.findall(r"POLL\s+(\d+)", stdout)]
+    axis_matches = re.findall(
+        r"AXIS\s+(\d+)\s+errorRet=(-?\d+)\s+errorCode=(-?\d+)\s+statusRet=(-?\d+)\s+statusCode=(-?\d+)\s+axisRet=(-?\d+)\s+axisStatus=(-?\d+)\s+encoderRet=(-?\d+)\s+encoder=(-?\d+)",
+        stdout,
+    )
+
+    axes: dict[str, dict[str, int]] = {}
+    for match in axis_matches:
+        axis, error_ret, error_code, status_ret, status_code, axis_ret, axis_status, encoder_ret, encoder = match
+        axes[axis] = {
+            "error_ret": int(error_ret),
+            "error_code": int(error_code),
+            "status_ret": int(status_ret),
+            "status_code": int(status_code),
+            "axis_ret": int(axis_ret),
+            "axis_status": int(axis_status),
+            "encoder_ret": int(encoder_ret),
+            "encoder": int(encoder),
+        }
+
+    summary_parts: list[str] = []
+    if open_rpmsg_match:
+        summary_parts.append(f"OpenRpmsg={open_rpmsg_match.group(1)}")
+    if poll_numbers:
+        summary_parts.append(f"polls={max(poll_numbers)}")
+    for axis, payload in sorted(axes.items(), key=lambda item: int(item[0])):
+        summary_parts.append(
+            f"axis{axis}: statusCode={payload['status_code']} axisStatus={payload['axis_status']} encoder={payload['encoder']}"
+        )
+
+    return {
+        "status": "ok",
+        "summary": "; ".join(summary_parts) if summary_parts else "heartbeat 探针已执行，但未解析到结构化输出。",
+        "open_rpmsg_return": int(open_rpmsg_match.group(1)) if open_rpmsg_match else None,
+        "poll_count": max(poll_numbers) if poll_numbers else 0,
+        "axes": axes,
+    }
+
+
+def _parse_generic_output(stdout: str, stderr: str, returncode: int | None) -> dict[str, object]:
+    if returncode in (0, None):
+        first_line = next((line.strip() for line in stdout.splitlines() if line.strip()), "")
+        return {"status": "ok", "summary": first_line or "Tool execution completed."}
+    first_error = next((line.strip() for line in stderr.splitlines() if line.strip()), "Tool execution failed.")
+    return {"status": "execution_failed", "summary": first_error}
