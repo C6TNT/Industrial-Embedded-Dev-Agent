@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import asdict
 from pathlib import Path
 
@@ -26,7 +27,13 @@ def _build_parser() -> argparse.ArgumentParser:
     benchmark_subparsers = benchmark_parser.add_subparsers(dest="benchmark_command", required=True)
     benchmark_subparsers.add_parser("summary", help="Summarize benchmark items")
 
-    benchmark_run_parser = benchmark_subparsers.add_parser("run", help="Run the rule-based benchmark baseline")
+    benchmark_run_parser = benchmark_subparsers.add_parser("run", help="Run a benchmark engine against the seed set")
+    benchmark_run_parser.add_argument(
+        "--engine",
+        choices=["rules", "rag"],
+        default="rules",
+        help="Benchmark engine to execute",
+    )
     benchmark_run_parser.add_argument("--type", dest="item_type", help="Filter benchmark run by item_type")
     benchmark_run_parser.add_argument("--tag", help="Filter benchmark run by tag")
 
@@ -71,7 +78,16 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _print_json(payload: object) -> None:
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    text = json.dumps(payload, ensure_ascii=False, indent=2)
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except AttributeError:
+        pass
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        sys.stdout.buffer.write(text.encode("utf-8"))
+        sys.stdout.buffer.write(b"\n")
 
 
 def _benchmark_path(root: Path) -> Path:
@@ -106,7 +122,7 @@ def main() -> None:
             return
         if args.benchmark_command == "run":
             filtered = filter_benchmark_items(items, item_type=args.item_type, tag=args.tag)
-            _print_json(run_benchmark(filtered))
+            _print_json(run_benchmark(filtered, root=paths.root, engine=args.engine))
             return
         if args.benchmark_command == "list":
             filtered = filter_benchmark_items(items, item_type=args.item_type, tag=args.tag)
