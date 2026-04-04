@@ -11,6 +11,7 @@ class ProjectPaths:
     benchmark_dir: Path
     taxonomy_dir: Path
     materials_dir: Path
+    chunks_dir: Path
 
 
 def discover_project_root(start: Path | None = None) -> Path:
@@ -30,4 +31,5 @@ def get_project_paths() -> ProjectPaths:
         benchmark_dir=data_dir / "benchmark",
         taxonomy_dir=data_dir / "taxonomy",
         materials_dir=data_dir / "materials",
+        chunks_dir=data_dir / "chunks",
     )

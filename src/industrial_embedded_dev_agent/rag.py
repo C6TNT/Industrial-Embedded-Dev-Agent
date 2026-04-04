@@ -40,11 +40,17 @@ def _search(root: Path, question: str, *, include_benchmark: bool, limit: int) -
 
 
 def _select_citations(hits: list[SearchHit], question: str, *, limit: int) -> list[Citation]:
+    ranked_hits = sorted(hits, key=_citation_rank_key, reverse=True)
     citations: list[Citation] = []
-    for hit in hits:
+    seen_snippets: set[str] = set()
+    for hit in ranked_hits:
         snippet = _extract_snippet(hit.content, question)
         if not snippet:
             continue
+        normalized = re.sub(r"\s+", " ", snippet.strip().lower())
+        if normalized in seen_snippets:
+            continue
+        seen_snippets.add(normalized)
         citations.append(
             Citation(
                 source_id=hit.source_id,
@@ -57,6 +63,40 @@ def _select_citations(hits: list[SearchHit], question: str, *, limit: int) -> li
         if len(citations) >= limit:
             break
     return citations
+
+
+def _citation_rank_key(hit: SearchHit) -> tuple[int, int, float]:
+    source_score = {
+        "chunk": 5,
+        "materials": 4,
+        "project": 3,
+        "taxonomy": 2,
+        "benchmark": 1,
+    }.get(hit.source_type, 0)
+
+    title = hit.title.lower()
+    source_id = hit.source_id.upper()
+    content_boost = 0
+    if source_id.startswith("WORKLOG"):
+        content_boost = 6
+    elif source_id.startswith("CASE-"):
+        content_boost = 5
+    elif source_id.startswith("LOG-"):
+        content_boost = 4
+    elif source_id.startswith("DOC-"):
+        content_boost = 3
+    elif source_id.startswith("LABELS"):
+        content_boost = 1
+
+    # Prefer substantive chunks over heading-only summaries when both match.
+    if " table_row" in title:
+        content_boost += 2
+    elif " text" in title:
+        content_boost += 1
+    elif " heading" in title:
+        content_boost -= 1
+
+    return (source_score, content_boost, hit.score)
 
 
 def _extract_snippet(content: str, question: str) -> str:
@@ -95,7 +135,6 @@ def _compose_answer(diagnosis, citations: list[Citation]) -> str:
 def _build_evidence_text(citations: list[Citation]) -> str:
     if not citations:
         return "当前没有检索到足够强的文档片段，建议补充更具体的对象字典、日志关键字或工具名。"
-
     parts = [f"{item.source_id} 提到“{item.snippet}”" for item in citations[:2]]
     return "结合文档片段，" + "；".join(parts) + "。"
 

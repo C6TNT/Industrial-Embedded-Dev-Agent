@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .analysis import analyze_text
 from .benchmarks import filter_benchmark_items, load_benchmark_items, summarize_benchmark
-from .chunking import build_chunks, summarize_chunks
+from .chunking import build_chunks, load_chunk_documents, summarize_chunks
 from .config import get_project_paths
 from .datasets import build_dataset_overview
 from .rag import answer_with_rag
@@ -155,14 +155,12 @@ def main() -> None:
         return
 
     if args.command == "chunks":
-        chunk_output = paths.root / "data" / "chunks" / "doc_chunks_v1.jsonl"
+        chunk_output = paths.chunks_dir / "doc_chunks_v1.jsonl"
         if args.chunks_command == "build":
             chunks = build_chunks(paths.root, output_path=chunk_output)
             _print_json(summarize_chunks(chunks))
             return
         if args.chunks_command == "summary":
-            from .chunking import load_chunk_documents
-
             chunks = load_chunk_documents(chunk_output)
             _print_json(summarize_chunks(chunks))
             return
