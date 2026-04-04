@@ -7,6 +7,7 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
+from .chunking import load_chunk_documents
 from .models import SearchHit
 
 
@@ -23,6 +24,18 @@ class SearchDocument:
 
 def build_search_documents(root: Path, *, include_benchmark: bool = True) -> list[SearchDocument]:
     docs: list[SearchDocument] = []
+    chunk_path = root / "data" / "chunks" / "doc_chunks_v1.jsonl"
+    chunk_docs = load_chunk_documents(chunk_path)
+    if chunk_docs:
+        docs.extend(
+            SearchDocument(
+                source_id=chunk.chunk_id,
+                source_type="chunk",
+                title=f"{chunk.source_id} {chunk.title}",
+                content=chunk.text,
+            )
+            for chunk in chunk_docs
+        )
     docs.extend(_markdown_sections(root / "Industrial Embedded Dev Agent_项目方案.md", "project"))
     docs.extend(_markdown_sections(root / "data" / "materials" / "material_index_v1.md", "materials"))
     docs.extend(_markdown_sections(root / "data" / "taxonomy" / "labels_v1.md", "taxonomy"))
@@ -184,6 +197,7 @@ def _benchmark_documents(path: Path) -> list[SearchDocument]:
 
 def _source_weight(source_type: str) -> float:
     return {
+        "chunk": 1.6,
         "project": 1.35,
         "materials": 1.25,
         "taxonomy": 1.1,

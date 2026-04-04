@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .analysis import analyze_text
 from .benchmarks import filter_benchmark_items, load_benchmark_items, summarize_benchmark
+from .chunking import build_chunks, summarize_chunks
 from .config import get_project_paths
 from .datasets import build_dataset_overview
 from .rag import answer_with_rag
@@ -61,6 +62,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Allow benchmark questions to participate in retrieval",
     )
+
+    chunks_parser = subparsers.add_parser("chunks", help="Build and inspect document chunks")
+    chunks_subparsers = chunks_parser.add_subparsers(dest="chunks_command", required=True)
+    chunks_subparsers.add_parser("build", help="Build normalized document chunks under data/chunks")
+    chunks_subparsers.add_parser("summary", help="Summarize the currently built chunks")
     return parser
 
 
@@ -147,3 +153,16 @@ def main() -> None:
         )
         _print_json(asdict(result))
         return
+
+    if args.command == "chunks":
+        chunk_output = paths.root / "data" / "chunks" / "doc_chunks_v1.jsonl"
+        if args.chunks_command == "build":
+            chunks = build_chunks(paths.root, output_path=chunk_output)
+            _print_json(summarize_chunks(chunks))
+            return
+        if args.chunks_command == "summary":
+            from .chunking import load_chunk_documents
+
+            chunks = load_chunk_documents(chunk_output)
+            _print_json(summarize_chunks(chunks))
+            return

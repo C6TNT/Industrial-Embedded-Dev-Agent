@@ -63,3 +63,14 @@ class RagAnswer:
     answer: str
     citations: list[Citation]
     structured_diagnosis: StructuredDiagnosis
+
+
+@dataclass(frozen=True)
+class DocumentChunk:
+    chunk_id: str
+    source_id: str
+    source_type: str
+    title: str
+    source_path: str
+    text: str
+    ordinal: int
