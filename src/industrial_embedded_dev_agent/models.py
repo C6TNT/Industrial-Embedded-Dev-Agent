@@ -74,3 +74,5 @@ class DocumentChunk:
     source_path: str
     text: str
     ordinal: int
+    section_title: str = ""
+    content_kind: str = "text"

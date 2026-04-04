@@ -31,7 +31,7 @@ def build_search_documents(root: Path, *, include_benchmark: bool = True) -> lis
             SearchDocument(
                 source_id=chunk.chunk_id,
                 source_type="chunk",
-                title=f"{chunk.source_id} {chunk.title}",
+                title=f"{chunk.source_id} {chunk.title} {chunk.section_title} {chunk.content_kind}",
                 content=chunk.text,
             )
             for chunk in chunk_docs
