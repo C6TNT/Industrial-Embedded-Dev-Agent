@@ -15,6 +15,7 @@ from .rag import answer_with_rag
 from .retrieval import build_search_documents, search_documents
 from .runner import run_benchmark
 from .taxonomy import parse_taxonomy_labels, summarize_taxonomy
+from .tools import list_tools, plan_tool_request, run_tool_request
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -74,6 +75,20 @@ def _build_parser() -> argparse.ArgumentParser:
     chunks_subparsers = chunks_parser.add_subparsers(dest="chunks_command", required=True)
     chunks_subparsers.add_parser("build", help="Build normalized document chunks under data/chunks")
     chunks_subparsers.add_parser("summary", help="Summarize the currently built chunks")
+
+    tools_parser = subparsers.add_parser("tools", help="Inspect and invoke the guarded tool layer")
+    tools_subparsers = tools_parser.add_subparsers(dest="tools_command", required=True)
+    tools_subparsers.add_parser("list", help="List registered tool specs")
+
+    tools_plan_parser = tools_subparsers.add_parser("plan", help="Plan a tool call without executing it")
+    tools_plan_parser.add_argument("request", help="Natural-language tool request")
+    tools_plan_parser.add_argument("--tool", dest="tool_id", help="Force a specific tool_id")
+
+    tools_run_parser = tools_subparsers.add_parser("run", help="Plan or execute a tool call")
+    tools_run_parser.add_argument("request", help="Natural-language tool request")
+    tools_run_parser.add_argument("--tool", dest="tool_id", help="Force a specific tool_id")
+    tools_run_parser.add_argument("--execute", action="store_true", help="Actually execute the allowed tool")
+    tools_run_parser.add_argument("--timeout", type=int, default=20, help="Execution timeout in seconds")
     return parser
 
 
@@ -179,4 +194,23 @@ def main() -> None:
         if args.chunks_command == "summary":
             chunks = load_chunk_documents(chunk_output)
             _print_json(summarize_chunks(chunks))
+            return
+
+    if args.command == "tools":
+        if args.tools_command == "list":
+            _print_json(list_tools(paths.root))
+            return
+        if args.tools_command == "plan":
+            _print_json(asdict(plan_tool_request(paths.root, args.request, tool_id=args.tool_id)))
+            return
+        if args.tools_command == "run":
+            _print_json(
+                run_tool_request(
+                    paths.root,
+                    args.request,
+                    tool_id=args.tool_id,
+                    execute=args.execute,
+                    timeout_seconds=args.timeout,
+                )
+            )
             return

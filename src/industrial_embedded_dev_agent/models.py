@@ -76,3 +76,42 @@ class DocumentChunk:
     ordinal: int
     section_title: str = ""
     content_kind: str = "text"
+
+
+@dataclass(frozen=True)
+class ToolSpec:
+    tool_id: str
+    name: str
+    description: str
+    risk_level: str
+    source_script: str
+    executor: str
+    default_args: list[str] = field(default_factory=list)
+    default_env: dict[str, str] = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ToolPlan:
+    request: str
+    summary: str
+    tool_id: str | None
+    tool_name: str | None
+    risk_level: str
+    allowed_to_execute: bool
+    requires_confirmation: bool
+    should_refuse: bool
+    command_preview: list[str] = field(default_factory=list)
+    reason: str = ""
+    evidence: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ToolExecutionResult:
+    tool_id: str
+    command: list[str]
+    executed: bool
+    returncode: int | None
+    stdout: str
+    stderr: str
+    risk_level: str
