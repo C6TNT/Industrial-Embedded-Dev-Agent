@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import asdict
@@ -57,7 +58,7 @@ def build_chunks(root: Path, *, output_path: Path | None = None) -> list[Documen
 
 
 def collect_chunks(root: Path) -> list[DocumentChunk]:
-    chunks: list[DocumentChunk] = []
+    raw_chunks: list[DocumentChunk] = []
     for source_path, source_id in iter_seed_sources(root):
         title = source_path.stem
         source_type = _classify_source(source_path)
@@ -65,7 +66,7 @@ def collect_chunks(root: Path) -> list[DocumentChunk]:
         if not extracted_blocks:
             continue
         for ordinal, block in enumerate(extracted_blocks, start=1):
-            chunks.append(
+            raw_chunks.append(
                 DocumentChunk(
                     chunk_id=f"{source_id}#chunk-{ordinal:03d}",
                     source_id=source_id,
@@ -78,7 +79,7 @@ def collect_chunks(root: Path) -> list[DocumentChunk]:
                     content_kind=block.get("content_kind", "text"),
                 )
             )
-    return chunks
+    return _finalize_chunks(raw_chunks)
 
 
 def iter_seed_sources(root: Path) -> list[tuple[Path, str]]:
@@ -294,6 +295,96 @@ def _normalize_plain_text(text: str) -> str:
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+def _finalize_chunks(chunks: list[DocumentChunk]) -> list[DocumentChunk]:
+    deduped: list[DocumentChunk] = []
+    seen_signatures: set[tuple[str, str, str, str]] = set()
+
+    for chunk in chunks:
+        normalized_text = _normalize_for_dedup(chunk.text)
+        if not _passes_quality_gate(chunk, normalized_text):
+            continue
+        signature = (
+            chunk.source_id,
+            chunk.content_kind,
+            chunk.section_title.strip().lower(),
+            hashlib.sha1(normalized_text.encode("utf-8")).hexdigest(),
+        )
+        if signature in seen_signatures:
+            continue
+        seen_signatures.add(signature)
+        deduped.append(chunk)
+
+    finalized: list[DocumentChunk] = []
+    by_source: dict[str, list[DocumentChunk]] = {}
+    for chunk in deduped:
+        by_source.setdefault(chunk.source_id, []).append(chunk)
+
+    for source_id, source_chunks in by_source.items():
+        for ordinal, chunk in enumerate(source_chunks, start=1):
+            finalized.append(
+                DocumentChunk(
+                    chunk_id=f"{source_id}#chunk-{ordinal:03d}",
+                    source_id=chunk.source_id,
+                    source_type=chunk.source_type,
+                    title=chunk.title,
+                    source_path=chunk.source_path,
+                    text=chunk.text,
+                    ordinal=ordinal,
+                    section_title=chunk.section_title,
+                    content_kind=chunk.content_kind,
+                )
+            )
+    return finalized
+
+
+def _passes_quality_gate(chunk: DocumentChunk, normalized_text: str) -> bool:
+    if not normalized_text:
+        return False
+
+    length = len(normalized_text)
+    if chunk.content_kind == "heading":
+        if length < 12:
+            return False
+        if _is_noise_heading(normalized_text):
+            return False
+        return True
+
+    if chunk.content_kind == "table_row":
+        return length >= 16 and normalized_text.count(":") >= 1
+
+    if length < 40:
+        return False
+    if _looks_like_noise_paragraph(normalized_text):
+        return False
+    return True
+
+
+def _normalize_for_dedup(text: str) -> str:
+    text = text.lower().strip()
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def _is_noise_heading(text: str) -> bool:
+    if text in {"目录", "contents", "附录", "修订记录"}:
+        return True
+    if re.fullmatch(r"[0-9.]+", text):
+        return True
+    if re.fullmatch(r"第?[一二三四五六七八九十0-9]+页", text):
+        return True
+    return False
+
+
+def _looks_like_noise_paragraph(text: str) -> bool:
+    if text.startswith("[page ") and len(text) < 55:
+        return True
+    if re.fullmatch(r"[0-9a-zA-Z _./:-]+", text) and len(text) < 55:
+        return True
+    if text.count("->") >= 4 and len(text) < 80:
+        return True
+    return False
 
 
 def _open_docx(path: Path) -> DocxDocument:
