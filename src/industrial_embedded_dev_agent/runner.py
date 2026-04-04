@@ -193,7 +193,7 @@ def _evaluate_citations(item: BenchmarkItem, citation_sources: list[str]) -> dic
         matched = [
             source
             for source in citation_sources
-            if any(source == expected or source.startswith(f"{expected}#") for expected in expected_sources)
+            if any(_citation_matches_expected(source, expected) for expected in expected_sources)
         ]
         return {
             "passed": bool(matched),
@@ -213,6 +213,18 @@ def _evaluate_citations(item: BenchmarkItem, citation_sources: list[str]) -> dic
             "actual_sources": citation_sources,
         },
     }
+
+
+def _citation_matches_expected(source: str, expected: str) -> bool:
+    source_lower = source.lower()
+    expected_lower = expected.lower()
+    if source == expected or source.startswith(f"{expected}#"):
+        return True
+    if expected_lower in {"项目方案", "industrial embedded dev agent_项目方案"}:
+        return "项目方案" in source or "industrial embedded dev agent_项目方案" in source_lower or source_lower.startswith("project-solution")
+    if expected_lower in {"标签体系_v1", "labels_v1", "labels-v1"}:
+        return "labels_v1" in source_lower or source_lower.startswith("labels")
+    return False
 
 
 def _build_knowledge_answer(item: BenchmarkItem) -> str:

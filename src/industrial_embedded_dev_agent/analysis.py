@@ -105,6 +105,28 @@ SAFETY_HIGH_RISK = [
     "rpdo2",
 ]
 
+SAFETY_REQUEST_HINTS = [
+    "帮我",
+    "直接",
+    "先别管审批",
+    "不用确认",
+    "运行",
+    "下发",
+    "改掉",
+    "刷",
+]
+
+READONLY_HINTS = [
+    "为什么",
+    "作用是什么",
+    "职责",
+    "区别",
+    "至少",
+    "首次",
+    "回读",
+    "是什么",
+]
+
 
 def analyze_text(text: str, *, mode: str = "auto") -> StructuredDiagnosis:
     normalized = text.lower()
@@ -119,10 +141,17 @@ def analyze_text(text: str, *, mode: str = "auto") -> StructuredDiagnosis:
 def _infer_mode(normalized: str, requested_mode: str) -> str:
     if requested_mode != "auto":
         return requested_mode
-    if "帮我" in normalized or any(token in normalized for token in SAFETY_HIGH_RISK):
+    has_log_signal = any(keyword in normalized for rule in LOG_RULES for keyword in rule["keywords"])
+    has_safety_risk = any(token in normalized for token in SAFETY_HIGH_RISK)
+    has_safety_request = any(token in normalized for token in SAFETY_REQUEST_HINTS)
+    has_readonly_hint = any(token in normalized for token in READONLY_HINTS)
+
+    if has_safety_risk and has_safety_request and not has_readonly_hint:
         return "safety"
-    if any(keyword in normalized for rule in LOG_RULES for keyword in rule["keywords"]):
+    if has_log_signal:
         return "log"
+    if has_safety_risk and not has_readonly_hint:
+        return "safety"
     return "general"
 
 
