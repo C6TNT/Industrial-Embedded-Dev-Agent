@@ -11,6 +11,8 @@ from .models import ToolExecutionResult, ToolPlan, ToolSpec
 
 
 SAFE_EXECUTION_RISKS = {"L0_readonly", "L1_low_risk_exec"}
+WSL_STUB_LIBRARY = "/home/librobot.so.1.0.0"
+WSL_STUB_FLAG = ".ieda_wsl_stub_enabled"
 
 
 def build_tool_registry(root: Path) -> list[ToolSpec]:
@@ -67,6 +69,33 @@ def build_tool_registry(root: Path) -> list[ToolSpec]:
 
 def list_tools(root: Path) -> list[dict[str, object]]:
     return [asdict(tool) for tool in build_tool_registry(root)]
+
+
+def inspect_wsl_environment(root: Path) -> dict[str, object]:
+    return {
+        "wsl_available": _command_success(["wsl.exe", "bash", "-lc", "true"]),
+        "python3_available": _command_success(["wsl.exe", "bash", "-lc", "command -v python3 >/dev/null 2>&1"]),
+        "gcc_available": _command_success(["wsl.exe", "bash", "-lc", "command -v gcc >/dev/null 2>&1"]),
+        "stub_mode_enabled": (root / WSL_STUB_FLAG).exists(),
+        "stub_library_path": WSL_STUB_LIBRARY,
+        "stub_library_present": _command_success(["wsl.exe", "bash", "-lc", f"test -f {WSL_STUB_LIBRARY}"]),
+        "stub_library_file_info": _capture_text(
+            ["wsl.exe", "bash", "-lc", f"if test -f {WSL_STUB_LIBRARY}; then file {WSL_STUB_LIBRARY}; fi"]
+        ).strip(),
+    }
+
+
+def setup_wsl_stub_environment(root: Path) -> dict[str, object]:
+    script_path = root / "scripts" / "setup_wsl_stub.ps1"
+    command = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script_path)]
+    completed = subprocess.run(command, cwd=str(root), capture_output=True, text=True)
+    return {
+        "command": command,
+        "returncode": completed.returncode,
+        "stdout": completed.stdout[-4000:],
+        "stderr": completed.stderr[-4000:],
+        "environment": inspect_wsl_environment(root),
+    }
 
 
 def plan_tool_request(root: Path, request: str, *, tool_id: str | None = None) -> ToolPlan:
@@ -254,10 +283,32 @@ def _tool_plan_reason(
 def _build_command_preview(tool: ToolSpec) -> list[str]:
     script_path = Path(tool.source_script)
     if tool.executor == "wsl_python":
-        return ["wsl.exe", "python3", _to_wsl_path(script_path), *tool.default_args]
+        return _build_wsl_python_command(script_path, tool.default_args)
     if tool.executor == "python":
         return ["python", str(script_path), *tool.default_args]
     return [str(script_path), *tool.default_args]
+
+
+def _command_success(command: list[str]) -> bool:
+    completed = subprocess.run(command, capture_output=True)
+    return completed.returncode == 0
+
+
+def _capture_text(command: list[str]) -> str:
+    completed = subprocess.run(command, capture_output=True)
+    return _decode_output(completed.stdout)
+
+
+def _build_wsl_python_command(script_path: Path, default_args: list[str]) -> list[str]:
+    project_root = Path(__file__).resolve().parents[2]
+    if _should_use_wsl_stub(project_root):
+        wrapper_path = project_root / "scripts" / "wsl" / "run_with_stub.py"
+        return ["wsl.exe", "python3", _to_wsl_path(wrapper_path), _to_wsl_path(script_path), *default_args]
+    return ["wsl.exe", "python3", _to_wsl_path(script_path), *default_args]
+
+
+def _should_use_wsl_stub(root: Path) -> bool:
+    return (root / WSL_STUB_FLAG).exists()
 
 
 def _to_wsl_path(path: Path) -> str:
