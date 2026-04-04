@@ -46,3 +46,20 @@ class StructuredDiagnosis:
     risk_level: str
     should_refuse: bool
     evidence: list[str]
+
+
+@dataclass(frozen=True)
+class Citation:
+    source_id: str
+    source_type: str
+    title: str
+    score: float
+    snippet: str
+
+
+@dataclass(frozen=True)
+class RagAnswer:
+    question: str
+    answer: str
+    citations: list[Citation]
+    structured_diagnosis: StructuredDiagnosis

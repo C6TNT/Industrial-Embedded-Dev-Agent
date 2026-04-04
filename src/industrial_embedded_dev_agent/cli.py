@@ -9,6 +9,7 @@ from .analysis import analyze_text
 from .benchmarks import filter_benchmark_items, load_benchmark_items, summarize_benchmark
 from .config import get_project_paths
 from .datasets import build_dataset_overview
+from .rag import answer_with_rag
 from .retrieval import build_search_documents, search_documents
 from .runner import run_benchmark
 from .taxonomy import parse_taxonomy_labels, summarize_taxonomy
@@ -51,6 +52,10 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze_parser = subparsers.add_parser("analyze", help="Produce structured baseline analysis")
     analyze_parser.add_argument("text", help="Input text to analyze")
     analyze_parser.add_argument("--mode", choices=["auto", "general", "log", "safety"], default="auto")
+
+    ask_parser = subparsers.add_parser("ask", help="Answer a question with retrieval-augmented generation")
+    ask_parser.add_argument("question", help="Question text")
+    ask_parser.add_argument("--limit", type=int, default=5, help="Maximum number of retrieved references")
     return parser
 
 
@@ -126,4 +131,9 @@ def main() -> None:
     if args.command == "analyze":
         diagnosis = analyze_text(args.text, mode=args.mode)
         _print_json(asdict(diagnosis))
+        return
+
+    if args.command == "ask":
+        result = answer_with_rag(paths.root, args.question, limit=args.limit)
+        _print_json(asdict(result))
         return
