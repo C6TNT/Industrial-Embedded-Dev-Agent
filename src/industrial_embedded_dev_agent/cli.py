@@ -1,0 +1,103 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+from .benchmarks import filter_benchmark_items, load_benchmark_items, summarize_benchmark
+from .config import get_project_paths
+from .datasets import build_dataset_overview
+from .taxonomy import parse_taxonomy_labels, summarize_taxonomy
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="ieda", description="Industrial Embedded Dev Agent MVP CLI")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    subparsers.add_parser("overview", help="Show a project dataset overview")
+
+    benchmark_parser = subparsers.add_parser("benchmark", help="Inspect benchmark assets")
+    benchmark_subparsers = benchmark_parser.add_subparsers(dest="benchmark_command", required=True)
+
+    benchmark_subparsers.add_parser("summary", help="Summarize benchmark items")
+
+    benchmark_list_parser = benchmark_subparsers.add_parser("list", help="List benchmark items")
+    benchmark_list_parser.add_argument("--type", dest="item_type", help="Filter by item_type")
+    benchmark_list_parser.add_argument("--tag", help="Filter by tag")
+
+    taxonomy_parser = subparsers.add_parser("taxonomy", help="Inspect taxonomy labels")
+    taxonomy_subparsers = taxonomy_parser.add_subparsers(dest="taxonomy_command", required=True)
+    taxonomy_subparsers.add_parser("summary", help="Summarize taxonomy groups")
+
+    taxonomy_list_parser = taxonomy_subparsers.add_parser("list", help="List taxonomy labels")
+    taxonomy_list_parser.add_argument(
+        "--group",
+        choices=["issue_categories", "cause_labels", "action_labels", "risk_labels"],
+        required=True,
+        help="Select which taxonomy group to print",
+    )
+    return parser
+
+
+def _print_json(payload: object) -> None:
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def _benchmark_path(root: Path) -> Path:
+    return root / "data" / "benchmark" / "benchmark_v1.jsonl"
+
+
+def _taxonomy_path(root: Path) -> Path:
+    return root / "data" / "taxonomy" / "labels_v1.md"
+
+
+def main() -> None:
+    parser = _build_parser()
+    args = parser.parse_args()
+    paths = get_project_paths()
+
+    if args.command == "overview":
+        overview = build_dataset_overview(paths)
+        _print_json(
+            {
+                "benchmark_total": overview.benchmark_total,
+                "benchmark_by_type": overview.benchmark_by_type,
+                "taxonomy_groups": overview.taxonomy_groups,
+                "material_counts": overview.material_counts,
+            }
+        )
+        return
+
+    if args.command == "benchmark":
+        items = load_benchmark_items(_benchmark_path(paths.root))
+        if args.benchmark_command == "summary":
+            _print_json(summarize_benchmark(items))
+            return
+        if args.benchmark_command == "list":
+            filtered = filter_benchmark_items(items, item_type=args.item_type, tag=args.tag)
+            _print_json(
+                [
+                    {
+                        "id": item.item_id,
+                        "item_type": item.item_type,
+                        "difficulty": item.difficulty,
+                        "tags": item.tags,
+                    }
+                    for item in filtered
+                ]
+            )
+            return
+
+    if args.command == "taxonomy":
+        taxonomy_path = _taxonomy_path(paths.root)
+        if args.taxonomy_command == "summary":
+            _print_json(summarize_taxonomy(taxonomy_path))
+            return
+        if args.taxonomy_command == "list":
+            groups = parse_taxonomy_labels(taxonomy_path)
+            _print_json(groups[args.group])
+            return
+
+
+if __name__ == "__main__":
+    main()
