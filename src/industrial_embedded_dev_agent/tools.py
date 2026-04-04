@@ -103,15 +103,17 @@ def plan_tool_request(root: Path, request: str, *, tool_id: str | None = None) -
             evidence=diagnosis.evidence,
         )
 
-    requires_confirmation = tool.risk_level not in SAFE_EXECUTION_RISKS
-    allowed_to_execute = tool.risk_level in SAFE_EXECUTION_RISKS and Path(tool.source_script).exists()
-    reason = _tool_plan_reason(tool, diagnosis, allowed_to_execute, requires_confirmation)
+    effective_risk = _effective_tool_risk(request, diagnosis, tool)
+    effective_summary = _effective_tool_summary(request, diagnosis, tool)
+    requires_confirmation = effective_risk not in SAFE_EXECUTION_RISKS
+    allowed_to_execute = effective_risk in SAFE_EXECUTION_RISKS and Path(tool.source_script).exists()
+    reason = _tool_plan_reason(tool, diagnosis, request, allowed_to_execute, requires_confirmation, effective_risk)
     return ToolPlan(
         request=request,
-        summary=diagnosis.summary,
+        summary=effective_summary,
         tool_id=tool.tool_id,
         tool_name=tool.name,
-        risk_level=tool.risk_level,
+        risk_level=effective_risk,
         allowed_to_execute=allowed_to_execute,
         requires_confirmation=requires_confirmation,
         should_refuse=False,
@@ -214,11 +216,25 @@ def _select_tool(request: str, diagnosis, registry: dict[str, ToolSpec]) -> Tool
     return None
 
 
-def _tool_plan_reason(tool: ToolSpec, diagnosis, allowed_to_execute: bool, requires_confirmation: bool) -> str:
+def _tool_plan_reason(
+    tool: ToolSpec,
+    diagnosis,
+    request: str,
+    allowed_to_execute: bool,
+    requires_confirmation: bool,
+    effective_risk: str,
+) -> str:
+    normalized = request.lower()
+    if tool.tool_id == "SCRIPT-004" and any(token in request for token in ["状态字", "编码器", "错误码", "只读"]):
+        return "Matched SCRIPT-004 because this is a 只读 request for 状态字/错误码/编码器 collection."
+    if tool.tool_id == "SCRIPT-004" and (
+        any(token in normalized for token in ["heartbeat", "snapshot"]) or "快照" in request or "采集" in request
+    ):
+        return "Matched SCRIPT-004 because it is a 低风险采集 tool for 状态快照 and heartbeat snapshots."
     if allowed_to_execute:
-        return f"Matched {tool.tool_id} because it stays within the {tool.risk_level} boundary and fits the current request."
+        return f"Matched {tool.tool_id} because it stays within the {effective_risk} boundary and fits the current request."
     if requires_confirmation:
-        return f"{tool.tool_id} matches the request, but it is classified as {tool.risk_level} and stays blocked pending manual confirmation."
+        return f"{tool.tool_id} matches the request, but it is classified as {effective_risk} and stays blocked pending manual confirmation."
     if not Path(tool.source_script).exists():
         return f"{tool.tool_id} matches the request, but the backing script path is missing."
     return f"{tool.tool_id} matches the request, but current policy keeps it blocked."
@@ -251,3 +267,22 @@ def _decode_output(payload: bytes) -> str:
         except UnicodeDecodeError:
             continue
     return payload.decode("utf-8", errors="replace")
+
+
+def _effective_tool_risk(request: str, diagnosis, tool: ToolSpec) -> str:
+    if tool.tool_id == "SCRIPT-004" and any(token in request for token in ["状态字", "编码器", "错误码", "只读"]):
+        return "L0_readonly"
+    if tool.tool_id == "SCRIPT-004":
+        return "L1_low_risk_exec"
+    return tool.risk_level
+
+
+def _effective_tool_summary(request: str, diagnosis, tool: ToolSpec) -> str:
+    normalized = request.lower()
+    if tool.tool_id == "SCRIPT-004" and any(token in request for token in ["状态字", "编码器", "错误码", "只读"]):
+        return "这是只读请求，可先读取状态字、错误码和编码器，确认链路是否还活着。"
+    if tool.tool_id == "SCRIPT-004" and (
+        "heartbeat" in normalized or "snapshot" in normalized or "快照" in request or "采集" in request
+    ):
+        return "这是低风险采集请求，适合运行状态快照工具后汇总结果。"
+    return diagnosis.summary

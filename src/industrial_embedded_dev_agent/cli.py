@@ -31,7 +31,7 @@ def _build_parser() -> argparse.ArgumentParser:
     benchmark_run_parser = benchmark_subparsers.add_parser("run", help="Run a benchmark engine against the seed set")
     benchmark_run_parser.add_argument(
         "--engine",
-        choices=["rules", "rag"],
+        choices=["rules", "rag", "tools"],
         default="rules",
         help="Benchmark engine to execute",
     )
