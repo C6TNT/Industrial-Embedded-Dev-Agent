@@ -56,6 +56,11 @@ def _build_parser() -> argparse.ArgumentParser:
     ask_parser = subparsers.add_parser("ask", help="Answer a question with retrieval-augmented generation")
     ask_parser.add_argument("question", help="Question text")
     ask_parser.add_argument("--limit", type=int, default=5, help="Maximum number of retrieved references")
+    ask_parser.add_argument(
+        "--include-benchmark",
+        action="store_true",
+        help="Allow benchmark questions to participate in retrieval",
+    )
     return parser
 
 
@@ -134,6 +139,11 @@ def main() -> None:
         return
 
     if args.command == "ask":
-        result = answer_with_rag(paths.root, args.question, limit=args.limit)
+        result = answer_with_rag(
+            paths.root,
+            args.question,
+            limit=args.limit,
+            include_benchmark=args.include_benchmark,
+        )
         _print_json(asdict(result))
         return
