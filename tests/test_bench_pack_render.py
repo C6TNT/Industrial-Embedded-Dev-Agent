@@ -14,7 +14,7 @@ from industrial_embedded_dev_agent.bench_pack_render import (
 )
 from industrial_embedded_dev_agent.models import BenchmarkItem
 from industrial_embedded_dev_agent.runner import run_local_checks_with_options
-from industrial_embedded_dev_agent.tools import finish_real_bench, kickoff_real_bench, prepare_real_bench_package, promote_finish_candidates, review_finish_candidates
+from industrial_embedded_dev_agent.tools import finish_real_bench, kickoff_real_bench, plan_pending_merge, prepare_real_bench_package, promote_finish_candidates, review_finish_candidates
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -618,3 +618,58 @@ def test_promote_finish_candidates_copies_into_pending_area(tmp_path: Path) -> N
     assert pending_jsonl.exists()
     assert len(pending_lines) == 1
     assert record_payload["session_id"] == session_id
+
+
+def test_plan_pending_merge_generates_merge_plan(tmp_path: Path) -> None:
+    session_id = "bench-am-09"
+    session_dir = REPO_ROOT / "reports" / "bench_packs" / "sessions" / session_id
+    if session_dir.exists():
+        shutil.rmtree(session_dir)
+
+    pending_dir = REPO_ROOT / "data" / "pending"
+    if pending_dir.exists():
+        shutil.rmtree(pending_dir)
+
+    prep = prepare_real_bench_package(
+        REPO_ROOT,
+        session_id=session_id,
+        label="Morning bench merge plan",
+        output_dir=tmp_path / "prep_bundle",
+    )
+
+    kickoff_real_bench(
+        REPO_ROOT,
+        Path(prep["plan_seed_path"]),
+        execute=False,
+        render_first_run=True,
+        render_session_review=True,
+    )
+    finish_real_bench(
+        REPO_ROOT,
+        session_id=session_id,
+        prep_dir=Path(prep["output_dir"]),
+    )
+    review_finish_candidates(
+        REPO_ROOT,
+        session_id=session_id,
+        prep_dir=Path(prep["output_dir"]),
+    )
+    promote_finish_candidates(
+        REPO_ROOT,
+        session_id=session_id,
+        prep_dir=Path(prep["output_dir"]),
+    )
+
+    result = plan_pending_merge(REPO_ROOT)
+    plan_dir = Path(result["output_dir"])
+    plan_json = plan_dir / "merge_plan.json"
+    plan_md = plan_dir / "merge_plan.md"
+    plan_payload = json.loads(plan_json.read_text(encoding="utf-8"))
+    plan_text = plan_md.read_text(encoding="utf-8")
+
+    assert plan_dir.exists()
+    assert plan_json.exists()
+    assert plan_md.exists()
+    assert len(plan_payload["case_candidates"]) >= 1
+    assert len(plan_payload["benchmark_candidates"]) >= 1
+    assert "## Merge Guidance" in plan_text

@@ -32,6 +32,7 @@ from .tools import (
     kickoff_real_bench,
     list_stub_scenarios,
     list_tools,
+    plan_pending_merge,
     plan_tool_request,
     promote_finish_candidates,
     prepare_real_bench_package,
@@ -127,6 +128,7 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_promote_candidates_parser = tools_subparsers.add_parser("promote-finish-candidates", help="Promote reviewed finish-pack candidates into the pending dataset area")
     tools_promote_candidates_parser.add_argument("--session-id", required=True, help="Session identifier used by finish-real-bench")
     tools_promote_candidates_parser.add_argument("--prep-dir", help="Optional prep bundle directory if it is not under reports/real_bench_prep/<session_id>")
+    tools_subparsers.add_parser("plan-pending-merge", help="Generate a merge plan for items currently staged under data/pending")
     tools_kickoff_real_parser = tools_subparsers.add_parser("kickoff-real-bench", help="Read a real-bench plan seed and create the first read-only bench-pack")
     tools_kickoff_real_parser.add_argument("seed", help="Path to a generated plan_seed.json")
     tools_kickoff_real_parser.add_argument("--execute", action="store_true", help="Actually execute the seeded read-only request")
@@ -342,6 +344,9 @@ def main() -> None:
                     prep_dir=Path(args.prep_dir) if args.prep_dir else None,
                 )
             )
+            return
+        if args.tools_command == "plan-pending-merge":
+            _print_json(plan_pending_merge(paths.root))
             return
         if args.tools_command == "kickoff-real-bench":
             render_first_run = args.render_first_run or args.render_all

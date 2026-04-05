@@ -515,6 +515,61 @@ def promote_finish_candidates(
     }
 
 
+def plan_pending_merge(root: Path) -> dict[str, object]:
+    pending_root = root / "data" / "pending"
+    cases_dir = pending_root / "cases"
+    logs_dir = pending_root / "logs"
+    benchmarks_dir = pending_root / "benchmarks"
+    plan_dir = pending_root / "merge_plan"
+    plan_dir.mkdir(parents=True, exist_ok=True)
+
+    case_files = sorted(cases_dir.glob("*.md")) if cases_dir.exists() else []
+    log_files = sorted(logs_dir.glob("*.json")) if logs_dir.exists() else []
+    benchmark_files = sorted(
+        [path for path in benchmarks_dir.glob("*.json") if path.name != "pending_benchmark_candidates.jsonl"]
+    ) if benchmarks_dir.exists() else []
+
+    plan_payload = {
+        "pending_root": str(pending_root),
+        "case_candidates": [
+            {
+                "source": str(path),
+                "suggested_target": "data/materials/",
+                "action": "review_and_copy",
+            }
+            for path in case_files
+        ],
+        "log_candidates": [
+            {
+                "source": str(path),
+                "suggested_target": "data/materials/ or future log corpus",
+                "action": "review_and_reclassify",
+            }
+            for path in log_files
+        ],
+        "benchmark_candidates": [
+            {
+                "source": str(path),
+                "suggested_target": "data/benchmark/benchmark_v1.jsonl",
+                "action": "review_then_append",
+            }
+            for path in benchmark_files
+        ],
+    }
+
+    plan_json_path = plan_dir / "merge_plan.json"
+    plan_json_path.write_text(json.dumps(plan_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    plan_md_path = plan_dir / "merge_plan.md"
+    plan_md_path.write_text(_render_pending_merge_plan_markdown(plan_payload), encoding="utf-8")
+
+    return {
+        "pending_root": str(pending_root),
+        "output_dir": str(plan_dir),
+        "merge_plan_json": str(plan_json_path),
+        "merge_plan_markdown": str(plan_md_path),
+    }
+
+
 def build_bench_pack(
     root: Path,
     request: str,
@@ -1309,6 +1364,52 @@ def _render_finish_candidate_review_markdown(
         "- Should this candidate stay as a draft, be edited, or be promoted into the formal dataset?",
         "",
     ]
+    return "\n".join(lines)
+
+
+def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
+    lines = [
+        "# Pending Merge Plan",
+        "",
+        f"- pending_root: {plan_payload.get('pending_root', '')}",
+        "",
+        "## Case Candidates",
+        "",
+    ]
+    case_candidates = plan_payload.get("case_candidates", [])
+    if case_candidates:
+        for item in case_candidates:
+            lines.append(f"- {item.get('source', '')} -> {item.get('suggested_target', '')} ({item.get('action', '')})")
+    else:
+        lines.append("- none")
+
+    lines.extend(["", "## Log Candidates", ""])
+    log_candidates = plan_payload.get("log_candidates", [])
+    if log_candidates:
+        for item in log_candidates:
+            lines.append(f"- {item.get('source', '')} -> {item.get('suggested_target', '')} ({item.get('action', '')})")
+    else:
+        lines.append("- none")
+
+    lines.extend(["", "## Benchmark Candidates", ""])
+    benchmark_candidates = plan_payload.get("benchmark_candidates", [])
+    if benchmark_candidates:
+        for item in benchmark_candidates:
+            lines.append(f"- {item.get('source', '')} -> {item.get('suggested_target', '')} ({item.get('action', '')})")
+    else:
+        lines.append("- none")
+
+    lines.extend(
+        [
+            "",
+            "## Merge Guidance",
+            "",
+            "- Review pending case candidates before copying them into formal materials.",
+            "- Review pending benchmark candidates before appending them into the canonical benchmark file.",
+            "- Keep promotion and formal merge as two separate commits whenever possible.",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
