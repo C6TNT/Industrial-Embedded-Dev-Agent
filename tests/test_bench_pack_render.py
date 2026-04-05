@@ -358,6 +358,12 @@ def test_kickoff_real_bench_from_seed_plan_only(tmp_path: Path) -> None:
     assert bench_pack["result"]["plan"]["risk_level"] == "L0_readonly"
     assert bench_pack["result"]["execution"]["parsed_output"]["status"] == "skipped"
     assert Path(bench_pack["saved_to"]).exists()
+    archive = result["archive"]
+    archive_dir = Path(archive["output_dir"])
+    assert archive_dir.exists()
+    assert (archive_dir / "bench_pack.json").exists()
+    assert (archive_dir / "run_summary.json").exists()
+    assert (archive_dir / "run_summary.md").exists()
 
 
 def test_kickoff_real_bench_can_render_first_run_draft(tmp_path: Path) -> None:
@@ -443,3 +449,15 @@ def test_kickoff_real_bench_can_render_both_drafts(tmp_path: Path) -> None:
     assert session_review["template"] == "session-review"
     assert "Session ID: bench-am-04" in first_run_text
     assert "Session ID: bench-am-04" in session_review_text
+    archive = result["archive"]
+    archive_dir = Path(archive["output_dir"])
+    summary_payload = json.loads((archive_dir / "run_summary.json").read_text(encoding="utf-8"))
+    summary_markdown = (archive_dir / "run_summary.md").read_text(encoding="utf-8")
+
+    assert (archive_dir / "first_run.md").exists()
+    assert (archive_dir / "session_review.md").exists()
+    assert summary_payload["session_id"] == "bench-am-04"
+    assert summary_payload["bench_pack_path"].endswith("bench_pack.json")
+    assert summary_payload["first_run_path"].endswith("first_run.md")
+    assert summary_payload["session_review_path"].endswith("session_review.md")
+    assert "## Archived Outputs" in summary_markdown

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 from dataclasses import asdict
 from datetime import datetime
@@ -304,6 +305,9 @@ def kickoff_real_bench(
                 bench_pack_path,
                 template="session-review",
             )
+    archived = _archive_kickoff_outputs(seed_path, payload)
+    if archived is not None:
+        payload["archive"] = archived
     return payload
 
 
@@ -835,6 +839,105 @@ def _render_real_bench_index(
         "- `session-review`",
         "",
         "Use `doctor_snapshot.json` to compare the original prep-time environment against the live bench environment before executing.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _archive_kickoff_outputs(seed_path: Path, payload: dict[str, object]) -> dict[str, object] | None:
+    prep_dir = seed_path.parent
+    if not prep_dir.exists():
+        return None
+
+    archive_dir = prep_dir / "kickoff_outputs"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+
+    bench_pack = payload.get("bench_pack", {})
+    bench_pack_path = Path(str(bench_pack.get("saved_to", ""))) if bench_pack.get("saved_to") else None
+    first_run = payload.get("rendered_first_run", {})
+    session_review = payload.get("rendered_session_review", {})
+    first_run_path = Path(str(first_run.get("output_path", ""))) if first_run.get("output_path") else None
+    session_review_path = Path(str(session_review.get("output_path", ""))) if session_review.get("output_path") else None
+
+    archived_files: list[str] = []
+    copied_bench_pack_path = _copy_if_present(bench_pack_path, archive_dir / "bench_pack.json")
+    if copied_bench_pack_path:
+        archived_files.append(str(copied_bench_pack_path))
+    copied_first_run_path = _copy_if_present(first_run_path, archive_dir / "first_run.md")
+    if copied_first_run_path:
+        archived_files.append(str(copied_first_run_path))
+    copied_session_review_path = _copy_if_present(session_review_path, archive_dir / "session_review.md")
+    if copied_session_review_path:
+        archived_files.append(str(copied_session_review_path))
+
+    summary_payload = {
+        "session_id": payload.get("session_id", ""),
+        "label": payload.get("label", ""),
+        "seed_path": str(seed_path),
+        "execute": payload.get("execute", False),
+        "request": payload.get("request", ""),
+        "bench_pack_path": str(copied_bench_pack_path) if copied_bench_pack_path else "",
+        "first_run_path": str(copied_first_run_path) if copied_first_run_path else "",
+        "session_review_path": str(copied_session_review_path) if copied_session_review_path else "",
+        "plan": bench_pack.get("result", {}).get("plan", {}),
+        "parsed_output": bench_pack.get("result", {}).get("execution", {}).get("parsed_output", {}),
+    }
+    summary_json_path = archive_dir / "run_summary.json"
+    summary_json_path.write_text(json.dumps(summary_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    archived_files.append(str(summary_json_path))
+
+    summary_md_path = archive_dir / "run_summary.md"
+    summary_md_path.write_text(_render_kickoff_summary_markdown(summary_payload), encoding="utf-8")
+    archived_files.append(str(summary_md_path))
+
+    return {
+        "output_dir": str(archive_dir),
+        "files": archived_files,
+        "run_summary_json": str(summary_json_path),
+        "run_summary_markdown": str(summary_md_path),
+    }
+
+
+def _copy_if_present(source: Path | None, destination: Path) -> Path | None:
+    if source is None or not source.exists():
+        return None
+    shutil.copyfile(source, destination)
+    return destination
+
+
+def _render_kickoff_summary_markdown(summary: dict[str, object]) -> str:
+    plan = summary.get("plan", {})
+    parsed = summary.get("parsed_output", {})
+    lines = [
+        "# Real Bench Kickoff Summary",
+        "",
+        f"- Session ID: {summary.get('session_id', '')}",
+        f"- Session label: {summary.get('label', '')}",
+        f"- Seed path: {summary.get('seed_path', '')}",
+        f"- Execute: {summary.get('execute', False)}",
+        "",
+        "## Request",
+        "",
+        f"- {summary.get('request', '')}",
+        "",
+        "## Plan Snapshot",
+        "",
+        f"- tool_id: {plan.get('tool_id', '')}",
+        f"- risk_level: {plan.get('risk_level', '')}",
+        f"- allowed_to_execute: {plan.get('allowed_to_execute', '')}",
+        "",
+        "## Parsed Output Snapshot",
+        "",
+        f"- status: {parsed.get('status', '')}",
+        f"- summary: {parsed.get('summary', '')}",
+        f"- transport_state: {parsed.get('transport_state', '')}",
+        f"- next_action: {parsed.get('next_action', '')}",
+        "",
+        "## Archived Outputs",
+        "",
+        f"- bench_pack.json: {summary.get('bench_pack_path', '')}",
+        f"- first_run.md: {summary.get('first_run_path', '')}",
+        f"- session_review.md: {summary.get('session_review_path', '')}",
         "",
     ]
     return "\n".join(lines)
