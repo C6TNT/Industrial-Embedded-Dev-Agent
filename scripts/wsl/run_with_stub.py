@@ -14,9 +14,10 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parents[2]
     sys.path.insert(0, str(repo_root / "scripts" / "wsl"))
 
-    from librobot_stub_runtime import patch_ctypes_cdll
+    from librobot_stub_runtime import load_stub_profile, patch_ctypes_cdll
 
-    patch_ctypes_cdll()
+    profile = load_stub_profile(repo_root / ".ieda_stub_profile.json")
+    patch_ctypes_cdll(scenario=profile["scenario"])
     sys.argv = [str(script_path), *sys.argv[2:]]
     runpy.run_path(str(script_path), run_name="__main__")
     return 0

@@ -16,6 +16,14 @@ from .models import ToolExecutionResult, ToolPlan, ToolSpec
 SAFE_EXECUTION_RISKS = {"L0_readonly", "L1_low_risk_exec"}
 WSL_STUB_LIBRARY = "/home/librobot.so.1.0.0"
 WSL_STUB_FLAG = ".ieda_wsl_stub_enabled"
+WSL_STUB_PROFILE = ".ieda_stub_profile.json"
+DEFAULT_STUB_SCENARIO = "nominal"
+STUB_SCENARIOS = {
+    "nominal": "Readable transport with stable idle snapshots on both axes.",
+    "encoder_stall": "Transport stays readable, but encoder feedback stops changing on both axes.",
+    "axis1_fault": "Transport stays readable, while axis1 reports a non-zero error code and abnormal status.",
+    "open_rpmsg_fail": "Transport initialization degrades immediately and OpenRpmsg returns a failure code.",
+}
 
 READONLY_TOKENS = ["状态字", "错误码", "编码器", "只读"]
 SNAPSHOT_TOKENS = ["快照", "采集", "heartbeat"]
@@ -77,15 +85,22 @@ def list_tools(root: Path) -> list[dict[str, object]]:
     return [asdict(tool) for tool in build_tool_registry(root)]
 
 
+def list_stub_scenarios() -> list[dict[str, str]]:
+    return [{"scenario": name, "description": description} for name, description in STUB_SCENARIOS.items()]
+
+
 def inspect_wsl_environment(root: Path) -> dict[str, object]:
     stub_mode_enabled = (root / WSL_STUB_FLAG).exists()
     stub_library_present = _command_success(["wsl.exe", "bash", "-lc", f"test -f {WSL_STUB_LIBRARY}"])
+    stub_scenario = _read_stub_scenario(root)
     return {
         "wsl_available": _command_success(["wsl.exe", "bash", "-lc", "true"]),
         "python3_available": _command_success(["wsl.exe", "bash", "-lc", "command -v python3 >/dev/null 2>&1"]),
         "gcc_available": _command_success(["wsl.exe", "bash", "-lc", "command -v gcc >/dev/null 2>&1"]),
         "execution_mode": _resolve_execution_mode(root, stub_library_present=stub_library_present),
         "stub_mode_enabled": stub_mode_enabled,
+        "stub_scenario": stub_scenario,
+        "stub_scenario_description": STUB_SCENARIOS.get(stub_scenario, ""),
         "real_mode_ready": (not stub_mode_enabled) and stub_library_present,
         "stub_library_path": WSL_STUB_LIBRARY,
         "stub_library_present": stub_library_present,
@@ -106,12 +121,23 @@ def get_execution_mode(root: Path) -> dict[str, object]:
     return {"mode": mode, "summary": summaries[mode], "environment": environment}
 
 
-def setup_wsl_stub_environment(root: Path) -> dict[str, object]:
+def setup_wsl_stub_environment(root: Path, *, scenario: str = DEFAULT_STUB_SCENARIO) -> dict[str, object]:
+    resolved_scenario = _normalize_stub_scenario(scenario)
     script_path = root / "scripts" / "setup_wsl_stub.ps1"
-    command = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script_path)]
+    command = [
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(script_path),
+        "-Scenario",
+        resolved_scenario,
+    ]
     completed = subprocess.run(command, cwd=str(root), capture_output=True, text=True)
     return {
         "command": command,
+        "scenario": resolved_scenario,
         "returncode": completed.returncode,
         "stdout": completed.stdout[-4000:],
         "stderr": completed.stderr[-4000:],
@@ -402,6 +428,21 @@ def _build_wsl_python_command(script_path: Path, default_args: list[str], *, roo
 
 def _should_use_wsl_stub(root: Path) -> bool:
     return (root / WSL_STUB_FLAG).exists()
+
+
+def _read_stub_scenario(root: Path) -> str:
+    profile_path = root / WSL_STUB_PROFILE
+    if not profile_path.exists():
+        return DEFAULT_STUB_SCENARIO
+    try:
+        payload = json.loads(profile_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return DEFAULT_STUB_SCENARIO
+    return _normalize_stub_scenario(str(payload.get("scenario", DEFAULT_STUB_SCENARIO)))
+
+
+def _normalize_stub_scenario(value: str) -> str:
+    return value if value in STUB_SCENARIOS else DEFAULT_STUB_SCENARIO
 
 
 def _resolve_execution_mode(root: Path, *, stub_library_present: bool | None = None) -> str:

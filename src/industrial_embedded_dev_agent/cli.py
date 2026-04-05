@@ -27,6 +27,7 @@ from .tools import (
     disable_wsl_stub_environment,
     get_execution_mode,
     inspect_wsl_environment,
+    list_stub_scenarios,
     list_tools,
     plan_tool_request,
     run_tool_request,
@@ -95,9 +96,11 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_parser = subparsers.add_parser("tools", help="Inspect and invoke the guarded tool layer")
     tools_subparsers = tools_parser.add_subparsers(dest="tools_command", required=True)
     tools_subparsers.add_parser("list", help="List registered tool specs")
+    tools_subparsers.add_parser("stub-scenarios", help="List the available no-hardware stub scenarios")
     tools_subparsers.add_parser("mode", help="Show the current WSL execution mode")
     tools_subparsers.add_parser("doctor", help="Inspect the local WSL execution environment")
-    tools_subparsers.add_parser("setup-stub", help="Enable the no-hardware WSL stub mode for local testing")
+    tools_setup_stub_parser = tools_subparsers.add_parser("setup-stub", help="Enable the no-hardware WSL stub mode for local testing")
+    tools_setup_stub_parser.add_argument("--scenario", default="nominal", help="Stub scenario name, for example nominal or axis1_fault")
     tools_subparsers.add_parser("use-real", help="Disable stub mode and switch back to real-hardware execution")
 
     tools_pack_parser = tools_subparsers.add_parser("bench-pack", help="Capture mode, doctor, plan, and execution into one JSON bundle")
@@ -247,6 +250,9 @@ def main() -> None:
         if args.tools_command == "list":
             _print_json(list_tools(paths.root))
             return
+        if args.tools_command == "stub-scenarios":
+            _print_json(list_stub_scenarios())
+            return
         if args.tools_command == "mode":
             _print_json(get_execution_mode(paths.root))
             return
@@ -254,7 +260,7 @@ def main() -> None:
             _print_json(inspect_wsl_environment(paths.root))
             return
         if args.tools_command == "setup-stub":
-            _print_json(setup_wsl_stub_environment(paths.root))
+            _print_json(setup_wsl_stub_environment(paths.root, scenario=args.scenario))
             return
         if args.tools_command == "use-real":
             _print_json(disable_wsl_stub_environment(paths.root))

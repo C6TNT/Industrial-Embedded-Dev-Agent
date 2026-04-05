@@ -38,6 +38,21 @@ Enable stub mode:
 python -m industrial_embedded_dev_agent tools setup-stub
 ```
 
+List available stub scenarios:
+
+```powershell
+python -m industrial_embedded_dev_agent tools stub-scenarios
+```
+
+Enable a specific stub scenario:
+
+```powershell
+python -m industrial_embedded_dev_agent tools setup-stub --scenario nominal
+python -m industrial_embedded_dev_agent tools setup-stub --scenario encoder_stall
+python -m industrial_embedded_dev_agent tools setup-stub --scenario axis1_fault
+python -m industrial_embedded_dev_agent tools setup-stub --scenario open_rpmsg_fail
+```
+
 Switch back to real-hardware mode:
 
 ```powershell
@@ -53,6 +68,13 @@ python -m industrial_embedded_dev_agent tools use-real
 - `real_unavailable`
   Stub mode is off, but the real WSL runtime path is not ready yet.
 
+`tools doctor` also reports:
+
+- `stub_scenario`
+- `stub_scenario_description`
+
+So you can tell which no-hardware branch is currently active.
+
 ## Validation Command
 
 For offline validation, start with `SCRIPT-004`:
@@ -67,6 +89,17 @@ Expected shape:
 - `parsed_output.status = ok`
 - `poll_count` is present
 - `axis0/axis1` snapshots are parsed into structured fields
+
+Recommended offline scenario checks:
+
+- `nominal`
+  Baseline readable transport and stable idle snapshots.
+- `encoder_stall`
+  Useful for testing `compare-pack` and stagnated feedback handling.
+- `axis1_fault`
+  Useful for testing non-zero error code parsing and issue capture templates.
+- `open_rpmsg_fail`
+  Useful for validating degraded transport summaries and follow-up guidance.
 
 ## Switching Back To The Real Bench
 

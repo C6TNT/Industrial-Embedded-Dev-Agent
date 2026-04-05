@@ -1,5 +1,6 @@
 param(
-    [string]$FlagName = ".ieda_wsl_stub_enabled"
+    [string]$FlagName = ".ieda_wsl_stub_enabled",
+    [string]$Scenario = "nominal"
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,3 +18,10 @@ if (-not (Test-Path $stubModule)) {
 $flagPath = Join-Path $repoRoot $FlagName
 Set-Content -Path $flagPath -Value "enabled $(Get-Date -Format s)" -NoNewline
 Write-Output "Created stub mode flag at $flagPath"
+
+$profilePath = Join-Path $repoRoot ".ieda_stub_profile.json"
+$profile = @{
+    scenario = $Scenario
+} | ConvertTo-Json -Depth 2
+Set-Content -Path $profilePath -Value $profile
+Write-Output "Wrote stub profile at $profilePath with scenario=$Scenario"
