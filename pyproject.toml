@@ -17,6 +17,11 @@ dependencies = [
   "pypdf>=6.9.2",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+]
+
 [project.scripts]
 ieda = "industrial_embedded_dev_agent.cli:main"
 
