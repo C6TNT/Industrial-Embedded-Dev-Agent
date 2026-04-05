@@ -413,3 +413,30 @@ def test_kickoff_real_bench_can_render_session_review_draft(tmp_path: Path) -> N
     assert "Session ID: bench-am-03" in markdown
     assert "Session label: Morning bench review" in markdown
     assert "## Final Session Verdict" in markdown
+
+
+def test_kickoff_real_bench_can_render_both_drafts(tmp_path: Path) -> None:
+    prep = prepare_real_bench_package(
+        REPO_ROOT,
+        session_id="bench-am-04",
+        label="Morning bench all",
+        output_dir=tmp_path / "prep_bundle",
+    )
+
+    result = kickoff_real_bench(
+        REPO_ROOT,
+        Path(prep["plan_seed_path"]),
+        execute=False,
+        render_first_run=True,
+        render_session_review=True,
+    )
+
+    first_run = result["rendered_first_run"]
+    session_review = result["rendered_session_review"]
+    first_run_text = Path(first_run["output_path"]).read_text(encoding="utf-8")
+    session_review_text = Path(session_review["output_path"]).read_text(encoding="utf-8")
+
+    assert first_run["template"] == "first-run"
+    assert session_review["template"] == "session-review"
+    assert "Session ID: bench-am-04" in first_run_text
+    assert "Session ID: bench-am-04" in session_review_text
