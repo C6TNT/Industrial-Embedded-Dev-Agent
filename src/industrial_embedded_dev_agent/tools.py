@@ -14,6 +14,9 @@ SAFE_EXECUTION_RISKS = {"L0_readonly", "L1_low_risk_exec"}
 WSL_STUB_LIBRARY = "/home/librobot.so.1.0.0"
 WSL_STUB_FLAG = ".ieda_wsl_stub_enabled"
 
+READONLY_TOKENS = ["状态字", "错误码", "编码器", "只读"]
+SNAPSHOT_TOKENS = ["快照", "采集", "heartbeat"]
+
 
 def build_tool_registry(root: Path) -> list[ToolSpec]:
     script_root = root / "资料" / "imxSoem-motion-control"
@@ -72,17 +75,32 @@ def list_tools(root: Path) -> list[dict[str, object]]:
 
 
 def inspect_wsl_environment(root: Path) -> dict[str, object]:
+    stub_mode_enabled = (root / WSL_STUB_FLAG).exists()
+    stub_library_present = _command_success(["wsl.exe", "bash", "-lc", f"test -f {WSL_STUB_LIBRARY}"])
     return {
         "wsl_available": _command_success(["wsl.exe", "bash", "-lc", "true"]),
         "python3_available": _command_success(["wsl.exe", "bash", "-lc", "command -v python3 >/dev/null 2>&1"]),
         "gcc_available": _command_success(["wsl.exe", "bash", "-lc", "command -v gcc >/dev/null 2>&1"]),
-        "stub_mode_enabled": (root / WSL_STUB_FLAG).exists(),
+        "execution_mode": _resolve_execution_mode(root, stub_library_present=stub_library_present),
+        "stub_mode_enabled": stub_mode_enabled,
+        "real_mode_ready": (not stub_mode_enabled) and stub_library_present,
         "stub_library_path": WSL_STUB_LIBRARY,
-        "stub_library_present": _command_success(["wsl.exe", "bash", "-lc", f"test -f {WSL_STUB_LIBRARY}"]),
+        "stub_library_present": stub_library_present,
         "stub_library_file_info": _capture_text(
             ["wsl.exe", "bash", "-lc", f"if test -f {WSL_STUB_LIBRARY}; then file {WSL_STUB_LIBRARY}; fi"]
         ).strip(),
     }
+
+
+def get_execution_mode(root: Path) -> dict[str, object]:
+    environment = inspect_wsl_environment(root)
+    mode = environment["execution_mode"]
+    summaries = {
+        "stub": "Current tool execution runs through the no-hardware stub wrapper.",
+        "real": "Current tool execution runs against the real WSL librobot path.",
+        "real_unavailable": "Current tool execution expects the real WSL librobot path, but that path is not ready yet.",
+    }
+    return {"mode": mode, "summary": summaries[mode], "environment": environment}
 
 
 def setup_wsl_stub_environment(root: Path) -> dict[str, object]:
@@ -96,6 +114,16 @@ def setup_wsl_stub_environment(root: Path) -> dict[str, object]:
         "stderr": completed.stderr[-4000:],
         "environment": inspect_wsl_environment(root),
     }
+
+
+def disable_wsl_stub_environment(root: Path) -> dict[str, object]:
+    flag_path = root / WSL_STUB_FLAG
+    if flag_path.exists():
+        flag_path.unlink()
+        message = f"Disabled stub mode by removing {flag_path.name}"
+    else:
+        message = "Stub mode was already disabled."
+    return {"status": "ok", "message": message, "environment": inspect_wsl_environment(root)}
 
 
 def plan_tool_request(root: Path, request: str, *, tool_id: str | None = None) -> ToolPlan:
@@ -113,7 +141,7 @@ def plan_tool_request(root: Path, request: str, *, tool_id: str | None = None) -
             allowed_to_execute=False,
             requires_confirmation=True,
             should_refuse=True,
-            command_preview=_build_command_preview(tool) if tool else [],
+            command_preview=_build_command_preview(tool, root=root) if tool else [],
             reason="Request crosses the current L2 execution boundary and must stay manual.",
             evidence=diagnosis.evidence,
         )
@@ -137,7 +165,7 @@ def plan_tool_request(root: Path, request: str, *, tool_id: str | None = None) -
     effective_summary = _effective_tool_summary(request, diagnosis, tool)
     requires_confirmation = effective_risk not in SAFE_EXECUTION_RISKS
     allowed_to_execute = effective_risk in SAFE_EXECUTION_RISKS and Path(tool.source_script).exists()
-    reason = _tool_plan_reason(tool, request, allowed_to_execute, requires_confirmation, effective_risk)
+    reason = _tool_plan_reason(tool, request, allowed_to_execute, requires_confirmation, effective_risk, root)
     return ToolPlan(
         request=request,
         summary=effective_summary,
@@ -147,7 +175,7 @@ def plan_tool_request(root: Path, request: str, *, tool_id: str | None = None) -
         allowed_to_execute=allowed_to_execute,
         requires_confirmation=requires_confirmation,
         should_refuse=False,
-        command_preview=_build_command_preview(tool),
+        command_preview=_build_command_preview(tool, root=root),
         reason=reason,
         evidence=diagnosis.evidence,
     )
@@ -196,7 +224,7 @@ def run_tool_request(
 
     registry = {tool.tool_id: tool for tool in build_tool_registry(root)}
     tool = registry[plan.tool_id]
-    command = _build_command_preview(tool)
+    command = _build_command_preview(tool, root=root)
     env = os.environ.copy()
     env.update(tool.default_env)
 
@@ -238,9 +266,7 @@ def run_tool_request(
 
 def _select_tool(request: str, diagnosis, registry: dict[str, ToolSpec]) -> ToolSpec | None:
     normalized = request.lower()
-    if any(token in normalized for token in ["heartbeat", "snapshot", "readonly"]) or any(
-        token in request for token in ["快照", "状态快照", "错误码", "状态字", "编码器", "只读"]
-    ):
+    if any(token in normalized for token in ["heartbeat", "snapshot", "readonly"]) or any(token in request for token in READONLY_TOKENS + SNAPSHOT_TOKENS):
         return registry.get("SCRIPT-004")
     if "tmp_probe_can_heartbeat.py" in normalized:
         return registry.get("SCRIPT-004")
@@ -263,27 +289,31 @@ def _tool_plan_reason(
     allowed_to_execute: bool,
     requires_confirmation: bool,
     effective_risk: str,
+    root: Path,
 ) -> str:
     normalized = request.lower()
-    if tool.tool_id == "SCRIPT-004" and any(token in request for token in ["状态字", "编码器", "错误码", "只读"]):
-        return "Matched SCRIPT-004 because this is a 只读 request for 状态字/错误码/编码器 collection."
+    current_mode = _resolve_execution_mode(root)
+    mode_note = f" Current execution mode: {current_mode}."
+
+    if tool.tool_id == "SCRIPT-004" and any(token in request for token in READONLY_TOKENS):
+        return "Matched SCRIPT-004 because this is a read-only collection request for statusword / error code / encoder." + mode_note
     if tool.tool_id == "SCRIPT-004" and (
-        any(token in normalized for token in ["heartbeat", "snapshot"]) or "快照" in request or "采集" in request
+        any(token in normalized for token in ["heartbeat", "snapshot"]) or any(token in request for token in SNAPSHOT_TOKENS)
     ):
-        return "Matched SCRIPT-004 because it is a 低风险采集 tool for 状态快照 and heartbeat snapshots."
+        return "Matched SCRIPT-004 because it is the low-risk snapshot tool for heartbeat and axis-state collection." + mode_note
     if allowed_to_execute:
-        return f"Matched {tool.tool_id} because it stays within the {effective_risk} boundary and fits the current request."
+        return f"Matched {tool.tool_id} because it stays within the {effective_risk} boundary and fits the current request." + mode_note
     if requires_confirmation:
-        return f"{tool.tool_id} matches the request, but it is classified as {effective_risk} and stays blocked pending manual confirmation."
+        return f"{tool.tool_id} matches the request, but it is classified as {effective_risk} and stays blocked pending manual confirmation." + mode_note
     if not Path(tool.source_script).exists():
         return f"{tool.tool_id} matches the request, but the backing script path is missing."
-    return f"{tool.tool_id} matches the request, but current policy keeps it blocked."
+    return f"{tool.tool_id} matches the request, but current policy keeps it blocked." + mode_note
 
 
-def _build_command_preview(tool: ToolSpec) -> list[str]:
+def _build_command_preview(tool: ToolSpec, *, root: Path) -> list[str]:
     script_path = Path(tool.source_script)
     if tool.executor == "wsl_python":
-        return _build_wsl_python_command(script_path, tool.default_args)
+        return _build_wsl_python_command(script_path, tool.default_args, root=root)
     if tool.executor == "python":
         return ["python", str(script_path), *tool.default_args]
     return [str(script_path), *tool.default_args]
@@ -299,16 +329,28 @@ def _capture_text(command: list[str]) -> str:
     return _decode_output(completed.stdout)
 
 
-def _build_wsl_python_command(script_path: Path, default_args: list[str]) -> list[str]:
-    project_root = Path(__file__).resolve().parents[2]
-    if _should_use_wsl_stub(project_root):
-        wrapper_path = project_root / "scripts" / "wsl" / "run_with_stub.py"
+def _build_wsl_python_command(script_path: Path, default_args: list[str], *, root: Path) -> list[str]:
+    if _should_use_wsl_stub(root):
+        wrapper_path = root / "scripts" / "wsl" / "run_with_stub.py"
         return ["wsl.exe", "python3", _to_wsl_path(wrapper_path), _to_wsl_path(script_path), *default_args]
     return ["wsl.exe", "python3", _to_wsl_path(script_path), *default_args]
 
 
 def _should_use_wsl_stub(root: Path) -> bool:
     return (root / WSL_STUB_FLAG).exists()
+
+
+def _resolve_execution_mode(root: Path, *, stub_library_present: bool | None = None) -> str:
+    if _should_use_wsl_stub(root):
+        return "stub"
+    library_ready = (
+        stub_library_present
+        if stub_library_present is not None
+        else _command_success(["wsl.exe", "bash", "-lc", f"test -f {WSL_STUB_LIBRARY}"])
+    )
+    if library_ready:
+        return "real"
+    return "real_unavailable"
 
 
 def _to_wsl_path(path: Path) -> str:
@@ -332,7 +374,7 @@ def _decode_output(payload: bytes) -> str:
 
 
 def _effective_tool_risk(request: str, tool: ToolSpec) -> str:
-    if tool.tool_id == "SCRIPT-004" and any(token in request for token in ["状态字", "编码器", "错误码", "只读"]):
+    if tool.tool_id == "SCRIPT-004" and any(token in request for token in READONLY_TOKENS):
         return "L0_readonly"
     if tool.tool_id == "SCRIPT-004":
         return "L1_low_risk_exec"
@@ -341,12 +383,12 @@ def _effective_tool_risk(request: str, tool: ToolSpec) -> str:
 
 def _effective_tool_summary(request: str, diagnosis, tool: ToolSpec) -> str:
     normalized = request.lower()
-    if tool.tool_id == "SCRIPT-004" and any(token in request for token in ["状态字", "编码器", "错误码", "只读"]):
-        return "这是只读请求，可先读取状态字、错误码和编码器，确认链路是否还活着。"
+    if tool.tool_id == "SCRIPT-004" and any(token in request for token in READONLY_TOKENS):
+        return "这是只读请求，可先读取状态字、错误码和编码器，确认当前链路是否可读。"
     if tool.tool_id == "SCRIPT-004" and (
-        "heartbeat" in normalized or "snapshot" in normalized or "快照" in request or "采集" in request
+        "heartbeat" in normalized or "snapshot" in normalized or any(token in request for token in SNAPSHOT_TOKENS)
     ):
-        return "这是低风险采集请求，适合运行状态快照工具后汇总结果。"
+        return "这是低风险状态采集请求，适合先跑状态快照和 heartbeat 采集，再汇总结论。"
     return diagnosis.summary
 
 
@@ -358,15 +400,15 @@ def _parse_execution_output(tool_id: str, stdout: str, stderr: str, returncode: 
 
 def _parse_probe_can_heartbeat(stdout: str, stderr: str, returncode: int | None) -> dict[str, object]:
     if returncode not in (0, None):
-        if "/home/librobot.so.1.0.0" in stderr:
+        if WSL_STUB_LIBRARY in stderr:
             return {
                 "status": "environment_error",
-                "summary": "WSL 侧缺少 /home/librobot.so.1.0.0，当前无法真正执行 heartbeat 探针。",
+                "summary": "The WSL librobot path is missing, so the heartbeat probe cannot load its transport library.",
                 "error_type": "missing_shared_library",
             }
         return {
             "status": "execution_failed",
-            "summary": "heartbeat 探针执行失败，请查看 stderr。",
+            "summary": "The heartbeat probe failed. Inspect stderr for the primary failure.",
         }
 
     open_rpmsg_match = re.search(r"OpenRpmsg\s+(-?\d+)", stdout)
@@ -390,22 +432,42 @@ def _parse_probe_can_heartbeat(stdout: str, stderr: str, returncode: int | None)
             "encoder": int(encoder),
         }
 
+    chain_ok = bool(open_rpmsg_match and int(open_rpmsg_match.group(1)) == 0)
+    axis_health: dict[str, str] = {}
+    observations: list[str] = []
     summary_parts: list[str] = []
+
     if open_rpmsg_match:
         summary_parts.append(f"OpenRpmsg={open_rpmsg_match.group(1)}")
     if poll_numbers:
         summary_parts.append(f"polls={max(poll_numbers)}")
+
     for axis, payload in sorted(axes.items(), key=lambda item: int(item[0])):
+        state = _describe_axis_snapshot(payload)
+        axis_health[axis] = state
+        observations.append(
+            f"axis{axis}: {state}, statusCode={payload['status_code']}, axisStatus={payload['axis_status']}, encoder={payload['encoder']}"
+        )
         summary_parts.append(
             f"axis{axis}: statusCode={payload['status_code']} axisStatus={payload['axis_status']} encoder={payload['encoder']}"
         )
 
+    next_action = (
+        "The transport looks readable. Next, compare these snapshots against vendor-tool or SDO readback on the real bench."
+        if chain_ok and axes
+        else "Re-check the WSL transport path and runtime setup before treating this as a valid bench snapshot."
+    )
+
     return {
         "status": "ok",
-        "summary": "; ".join(summary_parts) if summary_parts else "heartbeat 探针已执行，但未解析到结构化输出。",
+        "summary": "; ".join(summary_parts) if summary_parts else "Heartbeat probe completed, but no structured axis snapshot was parsed.",
         "open_rpmsg_return": int(open_rpmsg_match.group(1)) if open_rpmsg_match else None,
         "poll_count": max(poll_numbers) if poll_numbers else 0,
+        "transport_state": "readable" if chain_ok else "unverified",
         "axes": axes,
+        "axis_health": axis_health,
+        "observations": observations,
+        "next_action": next_action,
     }
 
 
@@ -415,3 +477,13 @@ def _parse_generic_output(stdout: str, stderr: str, returncode: int | None) -> d
         return {"status": "ok", "summary": first_line or "Tool execution completed."}
     first_error = next((line.strip() for line in stderr.splitlines() if line.strip()), "Tool execution failed.")
     return {"status": "execution_failed", "summary": first_error}
+
+
+def _describe_axis_snapshot(payload: dict[str, int]) -> str:
+    if payload["error_code"] != 0:
+        return "drive reports non-zero error code"
+    if payload["status_code"] == 33 and payload["axis_status"] in {4097, 4660, 4664}:
+        return "idle but readable"
+    if payload["status_code"] == 39 or payload["axis_status"] >= 8193:
+        return "appears enabled or moving"
+    return "readback received, but state needs manual interpretation"

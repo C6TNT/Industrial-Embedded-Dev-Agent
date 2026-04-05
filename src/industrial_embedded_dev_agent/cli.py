@@ -15,7 +15,15 @@ from .rag import answer_with_rag
 from .retrieval import build_search_documents, search_documents
 from .runner import run_benchmark
 from .taxonomy import parse_taxonomy_labels, summarize_taxonomy
-from .tools import inspect_wsl_environment, list_tools, plan_tool_request, run_tool_request, setup_wsl_stub_environment
+from .tools import (
+    disable_wsl_stub_environment,
+    get_execution_mode,
+    inspect_wsl_environment,
+    list_tools,
+    plan_tool_request,
+    run_tool_request,
+    setup_wsl_stub_environment,
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -79,8 +87,10 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_parser = subparsers.add_parser("tools", help="Inspect and invoke the guarded tool layer")
     tools_subparsers = tools_parser.add_subparsers(dest="tools_command", required=True)
     tools_subparsers.add_parser("list", help="List registered tool specs")
+    tools_subparsers.add_parser("mode", help="Show the current WSL execution mode")
     tools_subparsers.add_parser("doctor", help="Inspect the local WSL execution environment")
-    tools_subparsers.add_parser("setup-stub", help="Install a no-hardware WSL librobot stub for local testing")
+    tools_subparsers.add_parser("setup-stub", help="Enable the no-hardware WSL stub mode for local testing")
+    tools_subparsers.add_parser("use-real", help="Disable stub mode and switch back to real-hardware execution")
 
     tools_plan_parser = tools_subparsers.add_parser("plan", help="Plan a tool call without executing it")
     tools_plan_parser.add_argument("request", help="Natural-language tool request")
@@ -202,11 +212,17 @@ def main() -> None:
         if args.tools_command == "list":
             _print_json(list_tools(paths.root))
             return
+        if args.tools_command == "mode":
+            _print_json(get_execution_mode(paths.root))
+            return
         if args.tools_command == "doctor":
             _print_json(inspect_wsl_environment(paths.root))
             return
         if args.tools_command == "setup-stub":
             _print_json(setup_wsl_stub_environment(paths.root))
+            return
+        if args.tools_command == "use-real":
+            _print_json(disable_wsl_stub_environment(paths.root))
             return
         if args.tools_command == "plan":
             _print_json(asdict(plan_tool_request(paths.root, args.request, tool_id=args.tool_id)))
