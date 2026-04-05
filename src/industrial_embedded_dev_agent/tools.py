@@ -842,6 +842,129 @@ def apply_formal_merge(root: Path, *, dry_run: bool = True) -> dict[str, object]
     }
 
 
+def canonical_merge_preflight(root: Path) -> dict[str, object]:
+    assistant_dir = root / "data" / "pending" / "formal_merge_assistant"
+    assistant_dir.mkdir(parents=True, exist_ok=True)
+    pending_root = root / "data" / "pending"
+    case_files = sorted((pending_root / "cases").glob("*.md")) if (pending_root / "cases").exists() else []
+    log_files = sorted((pending_root / "logs").glob("*.json")) if (pending_root / "logs").exists() else []
+    benchmark_files = sorted(
+        [path for path in (pending_root / "benchmarks").glob("*.json") if path.name != "pending_benchmark_candidates.jsonl"]
+    ) if (pending_root / "benchmarks").exists() else []
+
+    benchmark_target = root / "data" / "benchmark" / "benchmark_v1.jsonl"
+    material_index_target = root / "data" / "materials" / "material_index_v1.md"
+    staging_root = assistant_dir / "staging"
+    benchmark_patch = assistant_dir / "benchmark_append_patch.jsonl"
+    material_index_patch = assistant_dir / "material_index_append_patch.md"
+
+    benchmark_existing_ids: set[str] = set()
+    if benchmark_target.exists():
+        for line in benchmark_target.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            candidate_id = str(payload.get("id", "")).strip()
+            if candidate_id:
+                benchmark_existing_ids.add(candidate_id)
+
+    benchmark_patch_payloads: list[dict[str, object]] = []
+    duplicate_benchmark_ids: list[str] = []
+    if benchmark_patch.exists():
+        for line in benchmark_patch.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            payload = json.loads(line)
+            benchmark_patch_payloads.append(payload)
+            candidate_id = str(payload.get("id", "")).strip()
+            if candidate_id and candidate_id in benchmark_existing_ids:
+                duplicate_benchmark_ids.append(candidate_id)
+
+    material_index_text = material_index_target.read_text(encoding="utf-8") if material_index_target.exists() else ""
+    proposed_material_entries: list[str] = []
+    conflicting_material_entries: list[str] = []
+    if material_index_patch.exists():
+        for line in material_index_patch.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("- "):
+                continue
+            entry = stripped[2:]
+            proposed_material_entries.append(entry)
+            if entry and entry in material_index_text:
+                conflicting_material_entries.append(entry)
+
+    expected_staging_files = [
+        staging_root / "data" / "materials" / "materials_case_merge_candidates.md",
+        staging_root / "data" / "materials" / "material_index_append_patch.md",
+        staging_root / "data" / "benchmark" / "benchmark_append_patch.jsonl",
+        staging_root / "recommended_commit_split.md",
+        staging_root / "staging_summary.json",
+    ]
+    missing_staging_files = [str(path) for path in expected_staging_files if not path.exists()]
+
+    checks = [
+        {
+            "name": "pending_candidates_present",
+            "passed": (len(case_files) + len(log_files) + len(benchmark_files)) > 0,
+            "details": {
+                "case_candidates": len(case_files),
+                "log_candidates": len(log_files),
+                "benchmark_candidates": len(benchmark_files),
+            },
+        },
+        {
+            "name": "benchmark_target_exists",
+            "passed": benchmark_target.exists(),
+            "details": str(benchmark_target),
+        },
+        {
+            "name": "material_index_target_exists",
+            "passed": material_index_target.exists(),
+            "details": str(material_index_target),
+        },
+        {
+            "name": "benchmark_duplicate_ids",
+            "passed": len(duplicate_benchmark_ids) == 0,
+            "details": duplicate_benchmark_ids,
+        },
+        {
+            "name": "material_index_conflicts",
+            "passed": len(conflicting_material_entries) == 0,
+            "details": conflicting_material_entries,
+        },
+        {
+            "name": "staging_bundle_ready",
+            "passed": len(missing_staging_files) == 0,
+            "details": missing_staging_files,
+        },
+    ]
+
+    payload = {
+        "passed": all(item["passed"] for item in checks),
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "assistant_dir": str(assistant_dir),
+        "checks": checks,
+        "benchmark_patch_count": len(benchmark_patch_payloads),
+        "proposed_material_entry_count": len(proposed_material_entries),
+    }
+
+    json_path = assistant_dir / "canonical_merge_preflight.json"
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    md_path = assistant_dir / "canonical_merge_preflight.md"
+    md_path.write_text(_render_canonical_merge_preflight_markdown(payload), encoding="utf-8")
+
+    return {
+        "passed": payload["passed"],
+        "output_dir": str(assistant_dir),
+        "canonical_merge_preflight_json": str(json_path),
+        "canonical_merge_preflight_markdown": str(md_path),
+    }
+
+
 def build_bench_pack(
     root: Path,
     request: str,
@@ -1865,6 +1988,26 @@ def _render_apply_formal_merge_markdown(payload: dict[str, object]) -> str:
             lines.append(f"- {item.get('name', '')}: {scope} | {item.get('reason', '')}")
     else:
         lines.append("- none")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _render_canonical_merge_preflight_markdown(payload: dict[str, object]) -> str:
+    lines = [
+        "# Canonical Merge Preflight",
+        "",
+        f"- passed: {payload.get('passed', False)}",
+        f"- generated_at: {payload.get('generated_at', '')}",
+        f"- assistant_dir: {payload.get('assistant_dir', '')}",
+        "",
+        f"- benchmark_patch_count: {payload.get('benchmark_patch_count', 0)}",
+        f"- proposed_material_entry_count: {payload.get('proposed_material_entry_count', 0)}",
+        "",
+        "## Checks",
+        "",
+    ]
+    for item in payload.get("checks", []):
+        lines.append(f"- {item.get('name', '')}: passed={item.get('passed', False)} details={item.get('details', '')}")
     lines.append("")
     return "\n".join(lines)
 

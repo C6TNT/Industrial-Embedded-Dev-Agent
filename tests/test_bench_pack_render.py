@@ -14,7 +14,7 @@ from industrial_embedded_dev_agent.bench_pack_render import (
 )
 from industrial_embedded_dev_agent.models import BenchmarkItem
 from industrial_embedded_dev_agent.runner import run_local_checks_with_options
-from industrial_embedded_dev_agent.tools import apply_formal_merge, finish_real_bench, kickoff_real_bench, plan_pending_merge, prepare_formal_merge_assistant, prepare_real_bench_package, promote_finish_candidates, review_finish_candidates
+from industrial_embedded_dev_agent.tools import apply_formal_merge, canonical_merge_preflight, finish_real_bench, kickoff_real_bench, plan_pending_merge, prepare_formal_merge_assistant, prepare_real_bench_package, promote_finish_candidates, review_finish_candidates
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -75,8 +75,12 @@ def _copy_sample_to_session(tmp_path: Path, sample_name: str, session_id: str, t
 def _reset_pending_root() -> None:
     pending_root = REPO_ROOT / "data" / "pending"
     if pending_root.exists():
-        shutil.rmtree(pending_root)
+        shutil.rmtree(pending_root, ignore_errors=True)
     pending_root.mkdir(parents=True, exist_ok=True)
+    (pending_root / "cases").mkdir(parents=True, exist_ok=True)
+    (pending_root / "logs").mkdir(parents=True, exist_ok=True)
+    (pending_root / "benchmarks").mkdir(parents=True, exist_ok=True)
+    (pending_root / "promotion_records").mkdir(parents=True, exist_ok=True)
     (pending_root / "README.md").write_text(PENDING_README_TEMPLATE, encoding="utf-8")
 
 
@@ -908,5 +912,61 @@ def test_apply_formal_merge_execute_writes_staging_only(tmp_path: Path) -> None:
         assert (staging_root / "staging_summary.json").exists()
         assert "benchmark_append_patch" in staged_files
         assert benchmark_target.read_text(encoding="utf-8") == benchmark_before
+    finally:
+        _reset_pending_root()
+
+
+def test_canonical_merge_preflight_reports_ready_staging_bundle(tmp_path: Path) -> None:
+    session_id = "bench-am-13"
+    session_dir = REPO_ROOT / "reports" / "bench_packs" / "sessions" / session_id
+    if session_dir.exists():
+        shutil.rmtree(session_dir)
+
+    _reset_pending_root()
+    try:
+        prep = prepare_real_bench_package(
+            REPO_ROOT,
+            session_id=session_id,
+            label="Morning bench canonical preflight",
+            output_dir=tmp_path / "prep_bundle",
+        )
+
+        kickoff_real_bench(
+            REPO_ROOT,
+            Path(prep["plan_seed_path"]),
+            execute=False,
+            render_first_run=True,
+            render_session_review=True,
+        )
+        finish_real_bench(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        review_finish_candidates(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        promote_finish_candidates(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        apply_formal_merge(REPO_ROOT, dry_run=False)
+
+        result = canonical_merge_preflight(REPO_ROOT)
+        summary_json = Path(result["canonical_merge_preflight_json"])
+        summary_md = Path(result["canonical_merge_preflight_markdown"])
+        payload = json.loads(summary_json.read_text(encoding="utf-8"))
+        text = summary_md.read_text(encoding="utf-8")
+        checks = {item["name"]: item for item in payload["checks"]}
+
+        assert summary_json.exists()
+        assert summary_md.exists()
+        assert payload["passed"] is True
+        assert checks["staging_bundle_ready"]["passed"] is True
+        assert checks["benchmark_duplicate_ids"]["passed"] is True
+        assert "## Checks" in text
     finally:
         _reset_pending_root()
