@@ -22,6 +22,7 @@ from .tools import (
     inspect_wsl_environment,
     list_tools,
     plan_tool_request,
+    render_bench_pack_markdown,
     run_tool_request,
     setup_wsl_stub_environment,
 )
@@ -99,6 +100,11 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_pack_parser.add_argument("--no-execute", action="store_true", help="Capture plan-only without actual execution")
     tools_pack_parser.add_argument("--timeout", type=int, default=20, help="Execution timeout in seconds")
     tools_pack_parser.add_argument("--output", help="Optional JSON output path")
+
+    tools_render_parser = tools_subparsers.add_parser("render-pack", help="Render a bench-pack JSON into a Markdown draft")
+    tools_render_parser.add_argument("input", help="Path to a bench-pack JSON file")
+    tools_render_parser.add_argument("--template", choices=["first-run", "issue"], required=True, help="Markdown draft type")
+    tools_render_parser.add_argument("--output", help="Optional Markdown output path")
 
     tools_plan_parser = tools_subparsers.add_parser("plan", help="Plan a tool call without executing it")
     tools_plan_parser.add_argument("request", help="Natural-language tool request")
@@ -240,6 +246,16 @@ def main() -> None:
                     tool_id=args.tool_id,
                     execute=not args.no_execute,
                     timeout_seconds=args.timeout,
+                    output_path=Path(args.output) if args.output else None,
+                )
+            )
+            return
+        if args.tools_command == "render-pack":
+            _print_json(
+                render_bench_pack_markdown(
+                    paths.root,
+                    Path(args.input),
+                    template=args.template,
                     output_path=Path(args.output) if args.output else None,
                 )
             )

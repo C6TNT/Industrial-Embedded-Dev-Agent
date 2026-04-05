@@ -166,6 +166,25 @@ def build_bench_pack(
     return pack
 
 
+def render_bench_pack_markdown(
+    root: Path,
+    input_path: Path,
+    *,
+    template: str,
+    output_path: Path | None = None,
+) -> dict[str, object]:
+    pack = json.loads(input_path.read_text(encoding="utf-8"))
+    rendered = _render_pack_template(pack, template=template)
+    destination = output_path or _default_rendered_pack_path(root, input_path, template=template)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(rendered, encoding="utf-8")
+    return {
+        "template": template,
+        "input_path": str(input_path),
+        "output_path": str(destination),
+    }
+
+
 def plan_tool_request(root: Path, request: str, *, tool_id: str | None = None) -> ToolPlan:
     diagnosis = analyze_text(request, mode="auto")
     registry = {tool.tool_id: tool for tool in build_tool_registry(root)}
@@ -533,3 +552,161 @@ def _default_bench_pack_path(root: Path, timestamp: datetime) -> Path:
     stamp = timestamp.strftime("%Y%m%d_%H%M%S_%f")
     suffix = uuid4().hex[:8]
     return root / "reports" / "bench_packs" / f"bench_pack_{stamp}_{suffix}.json"
+
+
+def _default_rendered_pack_path(root: Path, input_path: Path, *, template: str) -> Path:
+    base_name = input_path.stem
+    safe_template = template.replace("_", "-")
+    return root / "reports" / "bench_packs" / "rendered" / f"{base_name}_{safe_template}.md"
+
+
+def _normalize_render_payload(value):
+    if isinstance(value, dict):
+        return {key: _normalize_render_payload(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_render_payload(item) for item in value]
+    if isinstance(value, str):
+        return _repair_mojibake(value)
+    return value
+
+
+def _repair_mojibake(text: str) -> str:
+    suspicious_markers = ("杩", "鍏", "妗", "璇", "鐮", "鏈", "闆", "鍙", "閾", "銆")
+    if not any(marker in text for marker in suspicious_markers):
+        return text
+    for source_encoding in ("gbk", "gb18030"):
+        try:
+            repaired = text.encode(source_encoding).decode("utf-8")
+        except UnicodeError:
+            continue
+        if repaired != text:
+            return repaired
+    return text
+
+
+def _render_pack_template(pack: dict[str, object], *, template: str) -> str:
+    if template == "first-run":
+        return _render_first_run_template(pack)
+    if template == "issue":
+        return _render_issue_template(pack)
+    raise ValueError(f"Unsupported template: {template}")
+
+
+def _render_first_run_template(pack: dict[str, object]) -> str:
+    normalized_pack = _normalize_render_payload(pack)
+    captured_at = str(normalized_pack.get("captured_at", ""))
+    request = str(normalized_pack.get("request", ""))
+    mode = normalized_pack.get("mode", {})
+    doctor = normalized_pack.get("doctor", {})
+    result = normalized_pack.get("result", {})
+    plan = result.get("plan", {})
+    execution = result.get("execution", {})
+    parsed = execution.get("parsed_output", {})
+    axes = parsed.get("axes", {})
+    axis_health = parsed.get("axis_health", {})
+    axis0 = axes.get("0", {})
+    axis1 = axes.get("1", {})
+
+    return "\n".join(
+        [
+            "# Real Bench First-Run Record",
+            "",
+            f"- Captured at: {captured_at}",
+            f"- Request: {request}",
+            f"- Execution mode: {mode.get('mode', '')}",
+            "",
+            "## Environment State",
+            "",
+            f"- `tools mode`: {mode.get('summary', '')}",
+            f"- `tools doctor`: execution_mode={doctor.get('execution_mode', '')}, stub_mode_enabled={doctor.get('stub_mode_enabled', '')}, real_mode_ready={doctor.get('real_mode_ready', '')}",
+            "",
+            "## Plan Result",
+            "",
+            f"- tool_id: {plan.get('tool_id', '')}",
+            f"- risk_level: {plan.get('risk_level', '')}",
+            f"- allowed_to_execute: {plan.get('allowed_to_execute', '')}",
+            f"- requires_confirmation: {plan.get('requires_confirmation', '')}",
+            f"- reason: {plan.get('reason', '')}",
+            "",
+            "## Execution Result",
+            "",
+            f"- returncode: {execution.get('returncode', '')}",
+            f"- transport_state: {parsed.get('transport_state', '')}",
+            f"- poll_count: {parsed.get('poll_count', '')}",
+            f"- next_action: {parsed.get('next_action', '')}",
+            "",
+            "## Axis 0",
+            "",
+            f"- error_code: {axis0.get('error_code', '')}",
+            f"- status_code: {axis0.get('status_code', '')}",
+            f"- axis_status: {axis0.get('axis_status', '')}",
+            f"- encoder: {axis0.get('encoder', '')}",
+            f"- axis_health: {axis_health.get('0', '')}",
+            "",
+            "## Axis 1",
+            "",
+            f"- error_code: {axis1.get('error_code', '')}",
+            f"- status_code: {axis1.get('status_code', '')}",
+            f"- axis_status: {axis1.get('axis_status', '')}",
+            f"- encoder: {axis1.get('encoder', '')}",
+            f"- axis_health: {axis_health.get('1', '')}",
+            "",
+            "## Follow-Up",
+            "",
+            "- Vendor tool comparison:",
+            "- SDO / object dictionary comparison:",
+            "- Additional notes:",
+            "",
+        ]
+    )
+
+
+def _render_issue_template(pack: dict[str, object]) -> str:
+    normalized_pack = _normalize_render_payload(pack)
+    captured_at = str(normalized_pack.get("captured_at", ""))
+    request = str(normalized_pack.get("request", ""))
+    mode = normalized_pack.get("mode", {})
+    result = normalized_pack.get("result", {})
+    plan = result.get("plan", {})
+    execution = result.get("execution", {})
+    parsed = execution.get("parsed_output", {})
+
+    return "\n".join(
+        [
+            "# Real Bench Issue Capture",
+            "",
+            f"- Captured at: {captured_at}",
+            f"- Request: {request}",
+            f"- Execution mode: {mode.get('mode', '')}",
+            "",
+            "## Trigger Point",
+            "",
+            f"- tool_id: {plan.get('tool_id', '')}",
+            f"- risk_level: {plan.get('risk_level', '')}",
+            f"- allowed_to_execute: {plan.get('allowed_to_execute', '')}",
+            f"- returncode: {execution.get('returncode', '')}",
+            "",
+            "## Observed Symptom",
+            "",
+            f"- parsed status: {parsed.get('status', '')}",
+            f"- summary: {parsed.get('summary', execution.get('stderr', ''))}",
+            "",
+            "## Raw Evidence",
+            "",
+            "```json",
+            json.dumps(normalized_pack, ensure_ascii=False, indent=2),
+            "```",
+            "",
+            "## Immediate Assessment",
+            "",
+            "- likely category:",
+            "- immediate containment action:",
+            "- what was already ruled out:",
+            "- what is still unknown:",
+            "",
+            "## Recommended Next Step",
+            "",
+            "- ",
+            "",
+        ]
+    )
