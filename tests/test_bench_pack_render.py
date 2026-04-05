@@ -14,7 +14,7 @@ from industrial_embedded_dev_agent.bench_pack_render import (
 )
 from industrial_embedded_dev_agent.models import BenchmarkItem
 from industrial_embedded_dev_agent.runner import run_local_checks_with_options
-from industrial_embedded_dev_agent.tools import finish_real_bench, kickoff_real_bench, prepare_real_bench_package
+from industrial_embedded_dev_agent.tools import finish_real_bench, kickoff_real_bench, prepare_real_bench_package, review_finish_candidates
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -516,3 +516,49 @@ def test_finish_real_bench_collects_closing_outputs(tmp_path: Path) -> None:
     assert benchmark_candidate.exists()
     assert result["candidate_exports"]["case_candidate"].endswith("case_candidate.md")
     assert result["candidate_exports"]["benchmark_candidate"].endswith("benchmark_candidate.json")
+
+
+def test_review_finish_candidates_generates_review_summary(tmp_path: Path) -> None:
+    session_id = "bench-am-07"
+    session_dir = REPO_ROOT / "reports" / "bench_packs" / "sessions" / session_id
+    if session_dir.exists():
+        shutil.rmtree(session_dir)
+
+    prep = prepare_real_bench_package(
+        REPO_ROOT,
+        session_id=session_id,
+        label="Morning bench review candidates",
+        output_dir=tmp_path / "prep_bundle",
+    )
+
+    kickoff_real_bench(
+        REPO_ROOT,
+        Path(prep["plan_seed_path"]),
+        execute=False,
+        render_first_run=True,
+        render_session_review=True,
+    )
+    finish_real_bench(
+        REPO_ROOT,
+        session_id=session_id,
+        prep_dir=Path(prep["output_dir"]),
+    )
+
+    result = review_finish_candidates(
+        REPO_ROOT,
+        session_id=session_id,
+        prep_dir=Path(prep["output_dir"]),
+    )
+
+    review_dir = Path(result["output_dir"])
+    review_json = review_dir / "review_summary.json"
+    review_md = review_dir / "review_summary.md"
+    review_payload = json.loads(review_json.read_text(encoding="utf-8"))
+    review_text = review_md.read_text(encoding="utf-8")
+
+    assert review_dir.exists()
+    assert review_json.exists()
+    assert review_md.exists()
+    assert review_payload["session_id"] == session_id
+    assert "## Reviewer Checklist" in review_text
+    assert "suggested_tag" in review_text

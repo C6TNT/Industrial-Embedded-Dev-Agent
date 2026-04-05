@@ -392,6 +392,61 @@ def finish_real_bench(
     }
 
 
+def review_finish_candidates(
+    root: Path,
+    *,
+    session_id: str,
+    prep_dir: Path | None = None,
+) -> dict[str, object]:
+    resolved_prep_dir = prep_dir or (root / "reports" / "real_bench_prep" / session_id)
+    finish_dir = resolved_prep_dir / "finish_outputs"
+    candidate_dir = finish_dir / "candidate_exports"
+    review_dir = finish_dir / "candidate_review"
+    review_dir.mkdir(parents=True, exist_ok=True)
+
+    case_path = candidate_dir / "case_candidate.md"
+    log_path = candidate_dir / "log_candidate.json"
+    benchmark_path = candidate_dir / "benchmark_candidate.json"
+
+    case_text = case_path.read_text(encoding="utf-8") if case_path.exists() else ""
+    log_payload = json.loads(log_path.read_text(encoding="utf-8")) if log_path.exists() else {}
+    benchmark_payload = json.loads(benchmark_path.read_text(encoding="utf-8")) if benchmark_path.exists() else {}
+
+    review_payload = {
+        "session_id": session_id,
+        "candidate_dir": str(candidate_dir),
+        "has_case_candidate": case_path.exists(),
+        "has_log_candidate": log_path.exists(),
+        "has_benchmark_candidate": benchmark_path.exists(),
+        "suggested_tag": log_payload.get("suggested_tag", ""),
+        "tool_id": log_payload.get("tool_id", ""),
+        "risk_level": log_payload.get("risk_level", ""),
+        "benchmark_item_type": benchmark_payload.get("item_type", ""),
+        "benchmark_tags": benchmark_payload.get("tags", []),
+    }
+
+    review_json_path = review_dir / "review_summary.json"
+    review_json_path.write_text(json.dumps(review_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    review_md_path = review_dir / "review_summary.md"
+    review_md_path.write_text(
+        _render_finish_candidate_review_markdown(
+            review_payload,
+            case_preview=case_text,
+            benchmark_payload=benchmark_payload,
+        ),
+        encoding="utf-8",
+    )
+
+    return {
+        "session_id": session_id,
+        "candidate_dir": str(candidate_dir),
+        "output_dir": str(review_dir),
+        "review_summary_json": str(review_json_path),
+        "review_summary_markdown": str(review_md_path),
+    }
+
+
 def build_bench_pack(
     root: Path,
     request: str,
@@ -1143,6 +1198,50 @@ def _candidate_issue_tag(parsed: dict[str, object], plan: dict[str, object]) -> 
     if str(plan.get("tool_id", "")) == "SCRIPT-004":
         return "readonly_snapshot_review"
     return "finish_pack_review"
+
+
+def _render_finish_candidate_review_markdown(
+    review_payload: dict[str, object],
+    *,
+    case_preview: str,
+    benchmark_payload: dict[str, object],
+) -> str:
+    preview_lines = case_preview.splitlines()[:12]
+    benchmark_tags = benchmark_payload.get("tags", [])
+    benchmark_question = benchmark_payload.get("input", {}).get("question", "")
+    lines = [
+        "# Finish Candidate Review",
+        "",
+        f"- Session ID: {review_payload.get('session_id', '')}",
+        f"- candidate_dir: {review_payload.get('candidate_dir', '')}",
+        f"- suggested_tag: {review_payload.get('suggested_tag', '')}",
+        f"- tool_id: {review_payload.get('tool_id', '')}",
+        f"- risk_level: {review_payload.get('risk_level', '')}",
+        "",
+        "## Candidate Presence",
+        "",
+        f"- case_candidate: {review_payload.get('has_case_candidate', False)}",
+        f"- log_candidate: {review_payload.get('has_log_candidate', False)}",
+        f"- benchmark_candidate: {review_payload.get('has_benchmark_candidate', False)}",
+        "",
+        "## Benchmark Preview",
+        "",
+        f"- item_type: {review_payload.get('benchmark_item_type', '')}",
+        f"- question: {benchmark_question}",
+        f"- tags: {', '.join(benchmark_tags) if benchmark_tags else ''}",
+        "",
+        "## Case Preview",
+        "",
+        *preview_lines,
+        "",
+        "## Reviewer Checklist",
+        "",
+        "- Does the suggested tag match the actual bench evidence?",
+        "- Is the benchmark question phrased clearly enough for future regression use?",
+        "- Should this candidate stay as a draft, be edited, or be promoted into the formal dataset?",
+        "",
+    ]
+    return "\n".join(lines)
 
 
 def _collect_git_context(root: Path) -> dict[str, str]:
