@@ -14,11 +14,54 @@ from industrial_embedded_dev_agent.bench_pack_render import (
 )
 from industrial_embedded_dev_agent.models import BenchmarkItem
 from industrial_embedded_dev_agent.runner import run_local_checks_with_options
-from industrial_embedded_dev_agent.tools import finish_real_bench, kickoff_real_bench, plan_pending_merge, prepare_real_bench_package, promote_finish_candidates, review_finish_candidates
+from industrial_embedded_dev_agent.tools import finish_real_bench, kickoff_real_bench, plan_pending_merge, prepare_formal_merge_assistant, prepare_real_bench_package, promote_finish_candidates, review_finish_candidates
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SAMPLES_ROOT = REPO_ROOT / "data" / "examples" / "stub_bench_packs"
+PENDING_README_TEMPLATE = """# Pending Dataset Area
+
+`data/pending/` is the review-and-promotion buffer between bench-generated candidate drafts and the formal project dataset.
+
+It exists for one reason:
+- bench automation can generate useful candidate artifacts quickly
+- but those artifacts should not be merged into the formal dataset without human review
+
+## What Goes Here
+
+- `cases/`
+  Candidate case summaries promoted from `finish-real-bench`
+- `logs/`
+  Candidate log-style structured evidence exported from bench sessions
+- `benchmarks/`
+  Candidate benchmark items and the aggregated `pending_benchmark_candidates.jsonl`
+- `promotion_records/`
+  Machine-readable records showing what was promoted, from which session, and where it landed
+
+## What Does Not Belong Here
+
+- raw runtime dumps that should stay under `reports/`
+- temporary scratch files with no review value
+- direct edits to the formal benchmark or material index without review
+
+## Recommended Flow
+
+1. Run `ieda tools finish-real-bench --session-id <id>`
+2. Run `ieda tools review-finish-candidates --session-id <id>`
+3. Manually inspect the generated review summary and candidate files
+4. Run `ieda tools promote-finish-candidates --session-id <id>`
+5. Periodically merge reviewed pending items into the formal dataset in a separate, explicit change
+
+## Merge Rule
+
+Promotion into `data/pending/` means:
+- the candidate is considered useful enough to keep
+- but it is still not a formal benchmark, formal case, or formal material entry
+
+Formal dataset updates should happen in a separate reviewable step, so the repo always keeps a clear boundary between:
+- generated candidate content
+- curated canonical content
+"""
 
 
 def _copy_sample_to_session(tmp_path: Path, sample_name: str, session_id: str, target_name: str) -> Path:
@@ -27,6 +70,14 @@ def _copy_sample_to_session(tmp_path: Path, sample_name: str, session_id: str, t
     destination = session_dir / target_name
     shutil.copyfile(SAMPLES_ROOT / sample_name, destination)
     return destination
+
+
+def _reset_pending_root() -> None:
+    pending_root = REPO_ROOT / "data" / "pending"
+    if pending_root.exists():
+        shutil.rmtree(pending_root)
+    pending_root.mkdir(parents=True, exist_ok=True)
+    (pending_root / "README.md").write_text(PENDING_README_TEMPLATE, encoding="utf-8")
 
 
 def test_compare_pack_detects_axis1_fault_fields(tmp_path: Path) -> None:
@@ -570,54 +621,54 @@ def test_promote_finish_candidates_copies_into_pending_area(tmp_path: Path) -> N
     if session_dir.exists():
         shutil.rmtree(session_dir)
 
-    pending_dir = REPO_ROOT / "data" / "pending"
-    if pending_dir.exists():
-        shutil.rmtree(pending_dir)
+    _reset_pending_root()
+    try:
+        prep = prepare_real_bench_package(
+            REPO_ROOT,
+            session_id=session_id,
+            label="Morning bench promote",
+            output_dir=tmp_path / "prep_bundle",
+        )
 
-    prep = prepare_real_bench_package(
-        REPO_ROOT,
-        session_id=session_id,
-        label="Morning bench promote",
-        output_dir=tmp_path / "prep_bundle",
-    )
+        kickoff_real_bench(
+            REPO_ROOT,
+            Path(prep["plan_seed_path"]),
+            execute=False,
+            render_first_run=True,
+            render_session_review=True,
+        )
+        finish_real_bench(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        review_finish_candidates(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
 
-    kickoff_real_bench(
-        REPO_ROOT,
-        Path(prep["plan_seed_path"]),
-        execute=False,
-        render_first_run=True,
-        render_session_review=True,
-    )
-    finish_real_bench(
-        REPO_ROOT,
-        session_id=session_id,
-        prep_dir=Path(prep["output_dir"]),
-    )
-    review_finish_candidates(
-        REPO_ROOT,
-        session_id=session_id,
-        prep_dir=Path(prep["output_dir"]),
-    )
+        result = promote_finish_candidates(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
 
-    result = promote_finish_candidates(
-        REPO_ROOT,
-        session_id=session_id,
-        prep_dir=Path(prep["output_dir"]),
-    )
+        pending_root = Path(result["pending_root"])
+        record_path = Path(result["promotion_record"])
+        pending_jsonl = pending_root / "benchmarks" / "pending_benchmark_candidates.jsonl"
+        record_payload = json.loads(record_path.read_text(encoding="utf-8"))
+        pending_lines = pending_jsonl.read_text(encoding="utf-8").strip().splitlines()
 
-    pending_root = Path(result["pending_root"])
-    record_path = Path(result["promotion_record"])
-    pending_jsonl = pending_root / "benchmarks" / "pending_benchmark_candidates.jsonl"
-    record_payload = json.loads(record_path.read_text(encoding="utf-8"))
-    pending_lines = pending_jsonl.read_text(encoding="utf-8").strip().splitlines()
-
-    assert pending_root.exists()
-    assert (pending_root / "cases" / f"{session_id}_case_candidate.md").exists()
-    assert (pending_root / "logs" / f"{session_id}_log_candidate.json").exists()
-    assert (pending_root / "benchmarks" / f"{session_id}_benchmark_candidate.json").exists()
-    assert pending_jsonl.exists()
-    assert len(pending_lines) == 1
-    assert record_payload["session_id"] == session_id
+        assert pending_root.exists()
+        assert (pending_root / "cases" / f"{session_id}_case_candidate.md").exists()
+        assert (pending_root / "logs" / f"{session_id}_log_candidate.json").exists()
+        assert (pending_root / "benchmarks" / f"{session_id}_benchmark_candidate.json").exists()
+        assert pending_jsonl.exists()
+        assert len(pending_lines) == 1
+        assert record_payload["session_id"] == session_id
+    finally:
+        _reset_pending_root()
 
 
 def test_plan_pending_merge_generates_merge_plan(tmp_path: Path) -> None:
@@ -626,50 +677,114 @@ def test_plan_pending_merge_generates_merge_plan(tmp_path: Path) -> None:
     if session_dir.exists():
         shutil.rmtree(session_dir)
 
-    pending_dir = REPO_ROOT / "data" / "pending"
-    if pending_dir.exists():
-        shutil.rmtree(pending_dir)
+    _reset_pending_root()
+    try:
+        prep = prepare_real_bench_package(
+            REPO_ROOT,
+            session_id=session_id,
+            label="Morning bench merge plan",
+            output_dir=tmp_path / "prep_bundle",
+        )
 
-    prep = prepare_real_bench_package(
-        REPO_ROOT,
-        session_id=session_id,
-        label="Morning bench merge plan",
-        output_dir=tmp_path / "prep_bundle",
-    )
+        kickoff_real_bench(
+            REPO_ROOT,
+            Path(prep["plan_seed_path"]),
+            execute=False,
+            render_first_run=True,
+            render_session_review=True,
+        )
+        finish_real_bench(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        review_finish_candidates(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        promote_finish_candidates(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
 
-    kickoff_real_bench(
-        REPO_ROOT,
-        Path(prep["plan_seed_path"]),
-        execute=False,
-        render_first_run=True,
-        render_session_review=True,
-    )
-    finish_real_bench(
-        REPO_ROOT,
-        session_id=session_id,
-        prep_dir=Path(prep["output_dir"]),
-    )
-    review_finish_candidates(
-        REPO_ROOT,
-        session_id=session_id,
-        prep_dir=Path(prep["output_dir"]),
-    )
-    promote_finish_candidates(
-        REPO_ROOT,
-        session_id=session_id,
-        prep_dir=Path(prep["output_dir"]),
-    )
+        result = plan_pending_merge(REPO_ROOT)
+        plan_dir = Path(result["output_dir"])
+        plan_json = plan_dir / "merge_plan.json"
+        plan_md = plan_dir / "merge_plan.md"
+        plan_payload = json.loads(plan_json.read_text(encoding="utf-8"))
+        plan_text = plan_md.read_text(encoding="utf-8")
 
-    result = plan_pending_merge(REPO_ROOT)
-    plan_dir = Path(result["output_dir"])
-    plan_json = plan_dir / "merge_plan.json"
-    plan_md = plan_dir / "merge_plan.md"
-    plan_payload = json.loads(plan_json.read_text(encoding="utf-8"))
-    plan_text = plan_md.read_text(encoding="utf-8")
+        assert plan_dir.exists()
+        assert plan_json.exists()
+        assert plan_md.exists()
+        assert len(plan_payload["case_candidates"]) >= 1
+        assert len(plan_payload["benchmark_candidates"]) >= 1
+        assert "## Merge Guidance" in plan_text
+    finally:
+        _reset_pending_root()
 
-    assert plan_dir.exists()
-    assert plan_json.exists()
-    assert plan_md.exists()
-    assert len(plan_payload["case_candidates"]) >= 1
-    assert len(plan_payload["benchmark_candidates"]) >= 1
-    assert "## Merge Guidance" in plan_text
+
+def test_prepare_formal_merge_assistant_generates_draft_merge_bundle(tmp_path: Path) -> None:
+    session_id = "bench-am-10"
+    session_dir = REPO_ROOT / "reports" / "bench_packs" / "sessions" / session_id
+    if session_dir.exists():
+        shutil.rmtree(session_dir)
+
+    _reset_pending_root()
+    try:
+        prep = prepare_real_bench_package(
+            REPO_ROOT,
+            session_id=session_id,
+            label="Morning bench formal merge",
+            output_dir=tmp_path / "prep_bundle",
+        )
+
+        kickoff_real_bench(
+            REPO_ROOT,
+            Path(prep["plan_seed_path"]),
+            execute=False,
+            render_first_run=True,
+            render_session_review=True,
+        )
+        finish_real_bench(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        review_finish_candidates(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        promote_finish_candidates(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+
+        result = prepare_formal_merge_assistant(REPO_ROOT)
+        assistant_dir = Path(result["output_dir"])
+        assistant_json = assistant_dir / "formal_merge_assistant.json"
+        assistant_md = assistant_dir / "formal_merge_assistant.md"
+        case_bundle = assistant_dir / "materials_case_merge_candidates.md"
+        benchmark_append = assistant_dir / "benchmark_append_candidates.jsonl"
+        material_index_patch = assistant_dir / "material_index_patch.md"
+
+        assistant_payload = json.loads(assistant_json.read_text(encoding="utf-8"))
+        assistant_text = assistant_md.read_text(encoding="utf-8")
+        benchmark_lines = benchmark_append.read_text(encoding="utf-8").strip().splitlines()
+
+        assert assistant_dir.exists()
+        assert assistant_json.exists()
+        assert assistant_md.exists()
+        assert case_bundle.exists()
+        assert benchmark_append.exists()
+        assert material_index_patch.exists()
+        assert assistant_payload["counts"]["case_candidates"] >= 1
+        assert assistant_payload["counts"]["benchmark_candidates"] >= 1
+        assert "## Recommended Merge Order" in assistant_text
+        assert len(benchmark_lines) >= 1
+    finally:
+        _reset_pending_root()

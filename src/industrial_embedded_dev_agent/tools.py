@@ -570,6 +570,109 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
     }
 
 
+def prepare_formal_merge_assistant(root: Path) -> dict[str, object]:
+    pending_root = root / "data" / "pending"
+    assistant_dir = pending_root / "formal_merge_assistant"
+    assistant_dir.mkdir(parents=True, exist_ok=True)
+
+    merge_plan = plan_pending_merge(root)
+    merge_plan_payload = json.loads(Path(str(merge_plan["merge_plan_json"])).read_text(encoding="utf-8"))
+
+    case_files = sorted((pending_root / "cases").glob("*.md")) if (pending_root / "cases").exists() else []
+    log_files = sorted((pending_root / "logs").glob("*.json")) if (pending_root / "logs").exists() else []
+    benchmark_files = sorted(
+        [path for path in (pending_root / "benchmarks").glob("*.json") if path.name != "pending_benchmark_candidates.jsonl"]
+    ) if (pending_root / "benchmarks").exists() else []
+
+    case_bundle_path = assistant_dir / "materials_case_merge_candidates.md"
+    case_bundle_path.write_text(_render_case_merge_bundle(case_files), encoding="utf-8")
+
+    log_bundle_path = assistant_dir / "log_merge_candidates.jsonl"
+    _write_jsonl(
+        log_bundle_path,
+        [json.loads(path.read_text(encoding="utf-8")) for path in log_files],
+    )
+
+    benchmark_append_path = assistant_dir / "benchmark_append_candidates.jsonl"
+    _write_jsonl(
+        benchmark_append_path,
+        [json.loads(path.read_text(encoding="utf-8")) for path in benchmark_files],
+    )
+
+    material_index_patch_path = assistant_dir / "material_index_patch.md"
+    material_index_patch_path.write_text(
+        _render_material_index_patch(case_files=case_files, log_files=log_files),
+        encoding="utf-8",
+    )
+
+    assistant_payload = {
+        "pending_root": str(pending_root),
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "formal_targets": {
+            "materials_dir": "data/materials/",
+            "material_index": "data/materials/material_index_v1.md",
+            "benchmark_jsonl": "data/benchmark/benchmark_v1.jsonl",
+        },
+        "merge_plan_json": str(merge_plan["merge_plan_json"]),
+        "case_candidates": [
+            {
+                "source": str(path),
+                "suggested_target": "data/materials/",
+                "suggested_action": "review_then_copy_or_merge_section",
+            }
+            for path in case_files
+        ],
+        "log_candidates": [
+            {
+                "source": str(path),
+                "suggested_target": "data/materials/ or future structured log corpus",
+                "suggested_action": "review_then_reclassify",
+            }
+            for path in log_files
+        ],
+        "benchmark_candidates": [
+            {
+                "source": str(path),
+                "suggested_target": "data/benchmark/benchmark_v1.jsonl",
+                "suggested_action": "review_then_append_jsonl",
+            }
+            for path in benchmark_files
+        ],
+        "generated_files": {
+            "materials_case_merge_candidates": str(case_bundle_path),
+            "log_merge_candidates_jsonl": str(log_bundle_path),
+            "benchmark_append_candidates_jsonl": str(benchmark_append_path),
+            "material_index_patch": str(material_index_patch_path),
+        },
+        "counts": {
+            "case_candidates": len(case_files),
+            "log_candidates": len(log_files),
+            "benchmark_candidates": len(benchmark_files),
+        },
+    }
+
+    assistant_json_path = assistant_dir / "formal_merge_assistant.json"
+    assistant_json_path.write_text(json.dumps(assistant_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    assistant_md_path = assistant_dir / "formal_merge_assistant.md"
+    assistant_md_path.write_text(
+        _render_formal_merge_assistant_markdown(assistant_payload, merge_plan_payload=merge_plan_payload),
+        encoding="utf-8",
+    )
+
+    return {
+        "pending_root": str(pending_root),
+        "output_dir": str(assistant_dir),
+        "formal_merge_assistant_json": str(assistant_json_path),
+        "formal_merge_assistant_markdown": str(assistant_md_path),
+        "materials_case_merge_candidates": str(case_bundle_path),
+        "log_merge_candidates_jsonl": str(log_bundle_path),
+        "benchmark_append_candidates_jsonl": str(benchmark_append_path),
+        "material_index_patch": str(material_index_patch_path),
+        "merge_plan_json": str(merge_plan["merge_plan_json"]),
+    }
+
+
 def build_bench_pack(
     root: Path,
     request: str,
@@ -1411,6 +1514,137 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _render_case_merge_bundle(case_files: list[Path]) -> str:
+    lines = [
+        "# Pending Case Merge Candidates",
+        "",
+        "This file is a review bundle for case candidates currently staged under `data/pending/cases/`.",
+        "",
+    ]
+    if not case_files:
+        lines.append("- none")
+        lines.append("")
+        return "\n".join(lines)
+
+    for path in case_files:
+        lines.extend(
+            [
+                f"## Source: {path.name}",
+                "",
+                f"- Suggested formal target: data/materials/",
+                f"- Suggested action: review then merge or copy as a curated case note",
+                "",
+                path.read_text(encoding="utf-8").strip(),
+                "",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def _render_material_index_patch(*, case_files: list[Path], log_files: list[Path]) -> str:
+    lines = [
+        "# Suggested Material Index Patch",
+        "",
+        "Review these draft entries before appending them into `data/materials/material_index_v1.md`.",
+        "",
+        "## Suggested Case Entries",
+        "",
+    ]
+    if case_files:
+        for path in case_files:
+            lines.append(
+                f"- source_id: PENDING-{path.stem.upper()} | category: case_candidate | source: data/pending/cases/{path.name}"
+            )
+    else:
+        lines.append("- none")
+
+    lines.extend(["", "## Suggested Log Entries", ""])
+    if log_files:
+        for path in log_files:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            lines.append(
+                f"- source_id: PENDING-{path.stem.upper()} | category: log_candidate | tag: {payload.get('suggested_tag', '')} | source: data/pending/logs/{path.name}"
+            )
+    else:
+        lines.append("- none")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _render_formal_merge_assistant_markdown(
+    assistant_payload: dict[str, object],
+    *,
+    merge_plan_payload: dict[str, object],
+) -> str:
+    counts = assistant_payload.get("counts", {})
+    generated_files = assistant_payload.get("generated_files", {})
+    formal_targets = assistant_payload.get("formal_targets", {})
+    lines = [
+        "# Formal Merge Assistant",
+        "",
+        f"- pending_root: {assistant_payload.get('pending_root', '')}",
+        f"- generated_at: {assistant_payload.get('generated_at', '')}",
+        "",
+        "## Formal Targets",
+        "",
+        f"- materials_dir: {formal_targets.get('materials_dir', '')}",
+        f"- material_index: {formal_targets.get('material_index', '')}",
+        f"- benchmark_jsonl: {formal_targets.get('benchmark_jsonl', '')}",
+        "",
+        "## Candidate Counts",
+        "",
+        f"- case_candidates: {counts.get('case_candidates', 0)}",
+        f"- log_candidates: {counts.get('log_candidates', 0)}",
+        f"- benchmark_candidates: {counts.get('benchmark_candidates', 0)}",
+        "",
+        "## Generated Draft Files",
+        "",
+        f"- materials_case_merge_candidates: {generated_files.get('materials_case_merge_candidates', '')}",
+        f"- log_merge_candidates_jsonl: {generated_files.get('log_merge_candidates_jsonl', '')}",
+        f"- benchmark_append_candidates_jsonl: {generated_files.get('benchmark_append_candidates_jsonl', '')}",
+        f"- material_index_patch: {generated_files.get('material_index_patch', '')}",
+        "",
+        "## Recommended Merge Order",
+        "",
+        "1. Review the pending case bundle and keep only curated, reusable case notes.",
+        "2. Review the pending log candidates and decide whether they belong in materials or a future dedicated log corpus.",
+        "3. Review the benchmark append candidates before touching the canonical benchmark file.",
+        "4. Update the formal material index in a separate commit from the pending promotion step.",
+        "",
+        "## Merge Plan Snapshot",
+        "",
+    ]
+    for section_name in ("case_candidates", "log_candidates", "benchmark_candidates"):
+        items = merge_plan_payload.get(section_name, [])
+        lines.append(f"### {section_name}")
+        if items:
+            for item in items:
+                lines.append(
+                    f"- {item.get('source', '')} -> {item.get('suggested_target', '')} ({item.get('action', '')})"
+                )
+        else:
+            lines.append("- none")
+        lines.append("")
+
+    lines.extend(
+        [
+            "## Safety Boundary",
+            "",
+            "- This assistant does not edit formal dataset files directly.",
+            "- It only prepares draft bundles and append-ready files for human-reviewed follow-up changes.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _write_jsonl(path: Path, payloads: list[dict[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        for item in payloads:
+            handle.write(json.dumps(item, ensure_ascii=False) + "\n")
 
 
 def _collect_git_context(root: Path) -> dict[str, str]:
