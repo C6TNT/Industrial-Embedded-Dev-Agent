@@ -67,6 +67,8 @@ def _render_first_run_template(pack: dict[str, object]) -> str:
     normalized_pack = _normalize_render_payload(pack)
     captured_at = str(normalized_pack.get("captured_at", ""))
     request = str(normalized_pack.get("request", ""))
+    session_id = str(normalized_pack.get("session_id", ""))
+    label = str(normalized_pack.get("label", ""))
     mode = normalized_pack.get("mode", {})
     doctor = normalized_pack.get("doctor", {})
     result = normalized_pack.get("result", {})
@@ -83,6 +85,8 @@ def _render_first_run_template(pack: dict[str, object]) -> str:
             "# Real Bench First-Run Record",
             "",
             f"- Captured at: {captured_at}",
+            f"- Session ID: {session_id}",
+            f"- Session label: {label}",
             f"- Request: {request}",
             f"- Execution mode: {mode.get('mode', '')}",
             "",
@@ -136,6 +140,8 @@ def _render_issue_template(pack: dict[str, object]) -> str:
     normalized_pack = _normalize_render_payload(pack)
     captured_at = str(normalized_pack.get("captured_at", ""))
     request = str(normalized_pack.get("request", ""))
+    session_id = str(normalized_pack.get("session_id", ""))
+    label = str(normalized_pack.get("label", ""))
     mode = normalized_pack.get("mode", {})
     result = normalized_pack.get("result", {})
     plan = result.get("plan", {})
@@ -147,6 +153,8 @@ def _render_issue_template(pack: dict[str, object]) -> str:
             "# Real Bench Issue Capture",
             "",
             f"- Captured at: {captured_at}",
+            f"- Session ID: {session_id}",
+            f"- Session label: {label}",
             f"- Request: {request}",
             f"- Execution mode: {mode.get('mode', '')}",
             "",
@@ -187,6 +195,8 @@ def _render_session_review_template(pack: dict[str, object]) -> str:
     normalized_pack = _normalize_render_payload(pack)
     captured_at = str(normalized_pack.get("captured_at", ""))
     request = str(normalized_pack.get("request", ""))
+    session_id = str(normalized_pack.get("session_id", ""))
+    label = str(normalized_pack.get("label", ""))
     mode = normalized_pack.get("mode", {})
     doctor = normalized_pack.get("doctor", {})
     result = normalized_pack.get("result", {})
@@ -204,6 +214,8 @@ def _render_session_review_template(pack: dict[str, object]) -> str:
             "# Real Bench Session Review",
             "",
             f"- Captured at: {captured_at}",
+            f"- Session ID: {session_id}",
+            f"- Session label: {label}",
             f"- Request: {request}",
             f"- Execution mode: {mode.get('mode', '')}",
             "",

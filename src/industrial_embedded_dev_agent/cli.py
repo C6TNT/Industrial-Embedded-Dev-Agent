@@ -97,6 +97,8 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_pack_parser = tools_subparsers.add_parser("bench-pack", help="Capture mode, doctor, plan, and execution into one JSON bundle")
     tools_pack_parser.add_argument("request", help="Natural-language tool request")
     tools_pack_parser.add_argument("--tool", dest="tool_id", help="Force a specific tool_id")
+    tools_pack_parser.add_argument("--session-id", help="Group this bench-pack under a stable session identifier")
+    tools_pack_parser.add_argument("--label", help="Optional human-friendly label for the current bench session")
     tools_pack_parser.add_argument("--no-execute", action="store_true", help="Capture plan-only without actual execution")
     tools_pack_parser.add_argument("--timeout", type=int, default=20, help="Execution timeout in seconds")
     tools_pack_parser.add_argument("--output", help="Optional JSON output path")
@@ -244,6 +246,8 @@ def main() -> None:
                     paths.root,
                     args.request,
                     tool_id=args.tool_id,
+                    session_id=args.session_id,
+                    label=args.label,
                     execute=not args.no_execute,
                     timeout_seconds=args.timeout,
                     output_path=Path(args.output) if args.output else None,

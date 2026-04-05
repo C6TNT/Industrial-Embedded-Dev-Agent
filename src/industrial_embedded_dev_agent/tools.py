@@ -134,11 +134,14 @@ def build_bench_pack(
     request: str,
     *,
     tool_id: str | None = None,
+    session_id: str | None = None,
+    label: str | None = None,
     execute: bool = True,
     timeout_seconds: int = 20,
     output_path: Path | None = None,
 ) -> dict[str, object]:
     timestamp = datetime.now().astimezone()
+    resolved_session_id = _resolve_session_id(session_id, label, timestamp)
     mode = get_execution_mode(root)
     doctor = inspect_wsl_environment(root)
     result = run_tool_request(
@@ -154,12 +157,14 @@ def build_bench_pack(
         "captured_at": timestamp.isoformat(),
         "request": request,
         "tool_id_override": tool_id,
+        "session_id": resolved_session_id,
+        "label": label,
         "mode": mode,
         "doctor": doctor,
         "result": result,
     }
 
-    destination = output_path or _default_bench_pack_path(root, timestamp)
+    destination = output_path or _default_bench_pack_path(root, timestamp, session_id=resolved_session_id)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(pack, ensure_ascii=False, indent=2), encoding="utf-8")
     pack["saved_to"] = str(destination)
@@ -548,10 +553,30 @@ def _describe_axis_snapshot(payload: dict[str, int]) -> str:
     return "readback received, but state needs manual interpretation"
 
 
-def _default_bench_pack_path(root: Path, timestamp: datetime) -> Path:
+def _default_bench_pack_path(root: Path, timestamp: datetime, *, session_id: str | None = None) -> Path:
     stamp = timestamp.strftime("%Y%m%d_%H%M%S_%f")
     suffix = uuid4().hex[:8]
+    if session_id:
+        return root / "reports" / "bench_packs" / "sessions" / session_id / f"bench_pack_{stamp}_{suffix}.json"
     return root / "reports" / "bench_packs" / f"bench_pack_{stamp}_{suffix}.json"
+
+
+def _resolve_session_id(session_id: str | None, label: str | None, timestamp: datetime) -> str | None:
+    if session_id:
+        normalized = _slugify_token(session_id)
+        return normalized or None
+    if label:
+        normalized = _slugify_token(label)
+        if normalized:
+            return f"{normalized}_{timestamp.strftime('%Y%m%d')}"
+    return None
+
+
+def _slugify_token(value: str) -> str:
+    lowered = value.strip().lower()
+    slug = re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "-", lowered)
+    slug = slug.strip("-")
+    return slug[:80]
 
 
 def _default_rendered_pack_path(root: Path, input_path: Path, *, template: str) -> Path:
