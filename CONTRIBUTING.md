@@ -125,6 +125,20 @@ ieda tools prep-real-bench --session-id <session-id> --label "<session label>"
 
 这样可以把“准备包 -> 首次只读采证”这条链尽量标准化。
 
+如果你准备把一次 bench 的候选结果继续推进到正式数据并入准备，建议再阅读：
+
+- `docs/formal_merge_workflow.md`
+
+并优先按下面顺序操作：
+
+1. `ieda tools review-finish-candidates --session-id <session-id>`
+2. `ieda tools promote-finish-candidates --session-id <session-id>`
+3. `ieda tools plan-pending-merge`
+4. `ieda tools prepare-formal-merge`
+5. `ieda tools apply-formal-merge --dry-run`
+
+当前这条链只会生成审阅包和 patch 建议，不会直接修改 canonical 数据文件。
+
 ### 日志样本
 
 建议尽量满足：

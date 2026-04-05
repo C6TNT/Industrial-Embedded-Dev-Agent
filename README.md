@@ -209,6 +209,27 @@ ieda check --include-offline --include-rag --rag-type tool_safety
 
 也就是说，日常提交先走轻量兜底，离线样例回归和重点 RAG 回归则放在单独的完整检查里。
 
+## 正式数据并入流程
+
+如果你已经完成了一轮 bench 候选生成，并希望把候选内容逐步推进到正式数据并入准备，可以按这条链走：
+
+```bash
+ieda tools review-finish-candidates --session-id <session-id>
+ieda tools promote-finish-candidates --session-id <session-id>
+ieda tools plan-pending-merge
+ieda tools prepare-formal-merge
+ieda tools apply-formal-merge --dry-run
+```
+
+完整说明见：
+
+- `docs/formal_merge_workflow.md`
+
+当前这条链仍然保持低风险：
+
+- 会生成候选审核、merge plan、append patch 建议
+- 但不会直接修改 `data/materials/`、`data/materials/material_index_v1.md`、`data/benchmark/benchmark_v1.jsonl`
+
 ## 路线图
 
 ### Phase 0：准备阶段
