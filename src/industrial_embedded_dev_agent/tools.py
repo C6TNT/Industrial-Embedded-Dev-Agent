@@ -447,6 +447,74 @@ def review_finish_candidates(
     }
 
 
+def promote_finish_candidates(
+    root: Path,
+    *,
+    session_id: str,
+    prep_dir: Path | None = None,
+) -> dict[str, object]:
+    resolved_prep_dir = prep_dir or (root / "reports" / "real_bench_prep" / session_id)
+    finish_dir = resolved_prep_dir / "finish_outputs"
+    candidate_dir = finish_dir / "candidate_exports"
+
+    case_path = candidate_dir / "case_candidate.md"
+    log_path = candidate_dir / "log_candidate.json"
+    benchmark_path = candidate_dir / "benchmark_candidate.json"
+
+    pending_root = root / "data" / "pending"
+    pending_cases_dir = pending_root / "cases"
+    pending_logs_dir = pending_root / "logs"
+    pending_benchmarks_dir = pending_root / "benchmarks"
+    pending_root.mkdir(parents=True, exist_ok=True)
+    pending_cases_dir.mkdir(parents=True, exist_ok=True)
+    pending_logs_dir.mkdir(parents=True, exist_ok=True)
+    pending_benchmarks_dir.mkdir(parents=True, exist_ok=True)
+
+    copied_files: list[str] = []
+    promoted_case_path = pending_cases_dir / f"{session_id}_case_candidate.md"
+    promoted_log_path = pending_logs_dir / f"{session_id}_log_candidate.json"
+    promoted_benchmark_path = pending_benchmarks_dir / f"{session_id}_benchmark_candidate.json"
+    promotion_record_path = pending_root / "promotion_records" / f"{session_id}_promotion_record.json"
+    promotion_record_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if case_path.exists():
+        shutil.copyfile(case_path, promoted_case_path)
+        copied_files.append(str(promoted_case_path))
+    if log_path.exists():
+        shutil.copyfile(log_path, promoted_log_path)
+        copied_files.append(str(promoted_log_path))
+    benchmark_payload: dict[str, object] = {}
+    if benchmark_path.exists():
+        shutil.copyfile(benchmark_path, promoted_benchmark_path)
+        copied_files.append(str(promoted_benchmark_path))
+        benchmark_payload = json.loads(benchmark_path.read_text(encoding="utf-8"))
+
+    pending_jsonl_path = pending_benchmarks_dir / "pending_benchmark_candidates.jsonl"
+    if benchmark_payload:
+        with pending_jsonl_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(benchmark_payload, ensure_ascii=False) + "\n")
+        copied_files.append(str(pending_jsonl_path))
+
+    promotion_record = {
+        "session_id": session_id,
+        "prep_dir": str(resolved_prep_dir),
+        "candidate_dir": str(candidate_dir),
+        "promoted_case_path": str(promoted_case_path) if case_path.exists() else "",
+        "promoted_log_path": str(promoted_log_path) if log_path.exists() else "",
+        "promoted_benchmark_path": str(promoted_benchmark_path) if benchmark_path.exists() else "",
+        "pending_benchmark_jsonl": str(pending_jsonl_path) if benchmark_payload else "",
+    }
+    promotion_record_path.write_text(json.dumps(promotion_record, ensure_ascii=False, indent=2), encoding="utf-8")
+    copied_files.append(str(promotion_record_path))
+
+    return {
+        "session_id": session_id,
+        "pending_root": str(pending_root),
+        "files": copied_files,
+        "promotion_record": str(promotion_record_path),
+    }
+
+
 def build_bench_pack(
     root: Path,
     request: str,

@@ -14,7 +14,7 @@ from industrial_embedded_dev_agent.bench_pack_render import (
 )
 from industrial_embedded_dev_agent.models import BenchmarkItem
 from industrial_embedded_dev_agent.runner import run_local_checks_with_options
-from industrial_embedded_dev_agent.tools import finish_real_bench, kickoff_real_bench, prepare_real_bench_package, review_finish_candidates
+from industrial_embedded_dev_agent.tools import finish_real_bench, kickoff_real_bench, prepare_real_bench_package, promote_finish_candidates, review_finish_candidates
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -562,3 +562,59 @@ def test_review_finish_candidates_generates_review_summary(tmp_path: Path) -> No
     assert review_payload["session_id"] == session_id
     assert "## Reviewer Checklist" in review_text
     assert "suggested_tag" in review_text
+
+
+def test_promote_finish_candidates_copies_into_pending_area(tmp_path: Path) -> None:
+    session_id = "bench-am-08"
+    session_dir = REPO_ROOT / "reports" / "bench_packs" / "sessions" / session_id
+    if session_dir.exists():
+        shutil.rmtree(session_dir)
+
+    pending_dir = REPO_ROOT / "data" / "pending"
+    if pending_dir.exists():
+        shutil.rmtree(pending_dir)
+
+    prep = prepare_real_bench_package(
+        REPO_ROOT,
+        session_id=session_id,
+        label="Morning bench promote",
+        output_dir=tmp_path / "prep_bundle",
+    )
+
+    kickoff_real_bench(
+        REPO_ROOT,
+        Path(prep["plan_seed_path"]),
+        execute=False,
+        render_first_run=True,
+        render_session_review=True,
+    )
+    finish_real_bench(
+        REPO_ROOT,
+        session_id=session_id,
+        prep_dir=Path(prep["output_dir"]),
+    )
+    review_finish_candidates(
+        REPO_ROOT,
+        session_id=session_id,
+        prep_dir=Path(prep["output_dir"]),
+    )
+
+    result = promote_finish_candidates(
+        REPO_ROOT,
+        session_id=session_id,
+        prep_dir=Path(prep["output_dir"]),
+    )
+
+    pending_root = Path(result["pending_root"])
+    record_path = Path(result["promotion_record"])
+    pending_jsonl = pending_root / "benchmarks" / "pending_benchmark_candidates.jsonl"
+    record_payload = json.loads(record_path.read_text(encoding="utf-8"))
+    pending_lines = pending_jsonl.read_text(encoding="utf-8").strip().splitlines()
+
+    assert pending_root.exists()
+    assert (pending_root / "cases" / f"{session_id}_case_candidate.md").exists()
+    assert (pending_root / "logs" / f"{session_id}_log_candidate.json").exists()
+    assert (pending_root / "benchmarks" / f"{session_id}_benchmark_candidate.json").exists()
+    assert pending_jsonl.exists()
+    assert len(pending_lines) == 1
+    assert record_payload["session_id"] == session_id
