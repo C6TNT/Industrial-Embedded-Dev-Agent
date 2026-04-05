@@ -833,12 +833,23 @@ def test_apply_formal_merge_generates_dry_run_summary(tmp_path: Path) -> None:
         summary_md = Path(result["apply_formal_merge_markdown"])
         payload = json.loads(summary_json.read_text(encoding="utf-8"))
         text = summary_md.read_text(encoding="utf-8")
+        benchmark_patch = Path(result["benchmark_append_patch"])
+        material_index_patch = Path(result["material_index_append_patch"])
+        commit_plan = Path(result["recommended_commit_split"])
+        benchmark_patch_lines = benchmark_patch.read_text(encoding="utf-8").strip().splitlines()
+        commit_plan_text = commit_plan.read_text(encoding="utf-8")
 
         assert summary_json.exists()
         assert summary_md.exists()
+        assert benchmark_patch.exists()
+        assert material_index_patch.exists()
+        assert commit_plan.exists()
         assert payload["dry_run"] is True
         assert len(payload["planned_actions"]["benchmark_appends"]) >= 1
         assert "## Benchmark Appends" in text
         assert "Dry-run only" in text
+        assert "## Recommended Commit Split" in text
+        assert len(benchmark_patch_lines) >= 1
+        assert "formal-benchmark-appends" in commit_plan_text
     finally:
         _reset_pending_root()

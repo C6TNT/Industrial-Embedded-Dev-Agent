@@ -690,8 +690,10 @@ def apply_formal_merge(root: Path, *, dry_run: bool = True) -> dict[str, object]
         benchmark_existing_count = len([line for line in benchmark_target.read_text(encoding="utf-8").splitlines() if line.strip()])
 
     benchmark_append_preview = []
+    benchmark_payloads = []
     for path in benchmark_files:
         payload = json.loads(path.read_text(encoding="utf-8"))
+        benchmark_payloads.append(payload)
         benchmark_append_preview.append(
             {
                 "source": str(path),
@@ -748,6 +750,23 @@ def apply_formal_merge(root: Path, *, dry_run: bool = True) -> dict[str, object]
             "Review candidate wording before copying case notes into data/materials/.",
             "Review benchmark candidate phrasing before appending into benchmark_v1.jsonl.",
         ],
+        "recommended_commit_split": [
+            {
+                "name": "formal-material-candidates",
+                "scope": [
+                    "data/materials/",
+                    "data/materials/material_index_v1.md",
+                ],
+                "reason": "Keep curated material imports reviewable and separate from benchmark changes.",
+            },
+            {
+                "name": "formal-benchmark-appends",
+                "scope": [
+                    "data/benchmark/benchmark_v1.jsonl",
+                ],
+                "reason": "Keep benchmark candidate acceptance explicit and independently reviewable.",
+            },
+        ],
     }
 
     result_json_path = assistant_dir / "apply_formal_merge_dry_run.json"
@@ -756,12 +775,30 @@ def apply_formal_merge(root: Path, *, dry_run: bool = True) -> dict[str, object]
     result_md_path = assistant_dir / "apply_formal_merge_dry_run.md"
     result_md_path.write_text(_render_apply_formal_merge_markdown(result_payload), encoding="utf-8")
 
+    benchmark_patch_path = assistant_dir / "benchmark_append_patch.jsonl"
+    _write_jsonl(benchmark_patch_path, benchmark_payloads)
+
+    material_index_patch_lines_path = assistant_dir / "material_index_append_patch.md"
+    material_index_patch_lines_path.write_text(
+        _render_material_index_append_patch_lines(material_index_updates),
+        encoding="utf-8",
+    )
+
+    commit_plan_path = assistant_dir / "recommended_commit_split.md"
+    commit_plan_path.write_text(
+        _render_commit_split_markdown(result_payload["recommended_commit_split"]),
+        encoding="utf-8",
+    )
+
     return {
         "dry_run": dry_run,
         "output_dir": str(assistant_dir),
         "apply_formal_merge_json": str(result_json_path),
         "apply_formal_merge_markdown": str(result_md_path),
         "formal_merge_assistant_json": str(assistant["formal_merge_assistant_json"]),
+        "benchmark_append_patch": str(benchmark_patch_path),
+        "material_index_append_patch": str(material_index_patch_lines_path),
+        "recommended_commit_split": str(commit_plan_path),
     }
 
 
@@ -1779,7 +1816,54 @@ def _render_apply_formal_merge_markdown(payload: dict[str, object]) -> str:
             lines.append(f"- {note}")
     else:
         lines.append("- none")
+
+    commit_split = payload.get("recommended_commit_split", [])
+    lines.extend(["", "## Recommended Commit Split", ""])
+    if commit_split:
+        for item in commit_split:
+            scope = ", ".join(item.get("scope", []))
+            lines.append(f"- {item.get('name', '')}: {scope} | {item.get('reason', '')}")
+    else:
+        lines.append("- none")
     lines.append("")
+    return "\n".join(lines)
+
+
+def _render_material_index_append_patch_lines(items: list[dict[str, object]]) -> str:
+    lines = [
+        "# Material Index Append Patch",
+        "",
+        "Append the following reviewed lines into `data/materials/material_index_v1.md` only after curation.",
+        "",
+    ]
+    if items:
+        for item in items:
+            lines.append(f"- {item.get('proposed_entry', '')}")
+    else:
+        lines.append("- none")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _render_commit_split_markdown(items: list[dict[str, object]]) -> str:
+    lines = [
+        "# Recommended Commit Split",
+        "",
+    ]
+    if items:
+        for item in items:
+            lines.extend(
+                [
+                    f"## {item.get('name', '')}",
+                    "",
+                    f"- scope: {', '.join(item.get('scope', []))}",
+                    f"- reason: {item.get('reason', '')}",
+                    "",
+                ]
+            )
+    else:
+        lines.append("- none")
+        lines.append("")
     return "\n".join(lines)
 
 
