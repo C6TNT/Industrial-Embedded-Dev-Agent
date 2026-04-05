@@ -13,6 +13,7 @@
 - 再生成 formal merge assistant
 - 再做 apply dry-run / staging execute
 - 最后在考虑 canonical merge 之前先跑 preflight
+- 预检通过后，再生成 canonical patch bundle
 
 当前版本仍然不会直接改这些正式文件：
 
@@ -181,6 +182,27 @@ ieda tools canonical-merge-preflight
 如果当前仓库里还没有待并入的 pending/staging 数据，那么这一步返回 `passed=false` 是正常的。
 这代表“当前并入前提不满足”，不是工具本身出了故障。
 
+### 9. 生成 canonical patch bundle
+
+```bash
+ieda tools canonical-patch-helper
+```
+
+这一步仍然不会写 canonical 文件，但会生成一套更接近正式并入动作的 patch 包：
+
+- `data/pending/formal_merge_assistant/canonical_patch_bundle/canonical_patch_manifest.json`
+- `data/pending/formal_merge_assistant/canonical_patch_bundle/canonical_patch_manifest.md`
+- `data/pending/formal_merge_assistant/canonical_patch_bundle/data/benchmark/benchmark_v1.append.jsonl`
+- `data/pending/formal_merge_assistant/canonical_patch_bundle/data/materials/material_index_v1.append.md`
+- `data/pending/formal_merge_assistant/canonical_patch_bundle/data/materials/materials_case_merge_candidates.md`
+- `data/pending/formal_merge_assistant/canonical_patch_bundle/recommended_commit_split.md`
+
+这一步的用途是：
+
+- 把 canonical merge 前真正需要审阅的 patch 文件集中打包
+- 给 benchmark append、material index append、materials 候选文件一个更清晰的落地点
+- 让后续人工 canonical merge 不必再从 staging 或 dry-run 输出里手工翻找文件
+
 ---
 
 ## 推荐人工审阅顺序
@@ -194,6 +216,7 @@ ieda tools canonical-merge-preflight
 5. `data/pending/formal_merge_assistant/recommended_commit_split.md`
 6. `data/pending/formal_merge_assistant/staging/staging_summary.json`
 7. `data/pending/formal_merge_assistant/canonical_merge_preflight.md`
+8. `data/pending/formal_merge_assistant/canonical_patch_bundle/canonical_patch_manifest.md`
 
 如果要进一步做实际并入，建议再分别查看：
 
@@ -215,6 +238,7 @@ ieda tools canonical-merge-preflight
 - 不自动删除 pending 区候选
 - `--execute` 也只会写到 `data/pending/formal_merge_assistant/staging/`
 - `canonical-merge-preflight` 只做只读预检
+- `canonical-patch-helper` 只生成 patch bundle，不会写 canonical 数据
 
 也就是说，当前工具会尽可能把“正式并入前的准备工作”做完，但最后的 canonical 数据修改仍然保留给人工确认。
 
@@ -253,7 +277,7 @@ ieda tools canonical-merge-preflight
 
 如果后面要继续推进，最自然的方向是：
 
-1. 在人工确认过 staging 结果和 preflight 结果之后，再决定是否引入“canonical merge helper”
+1. 在人工确认过 staging、preflight 和 canonical patch bundle 之后，再决定是否真的写 canonical 数据
 2. 继续保持 benchmark 变更和 materials 变更分 commit 审阅
 
 这样既能提高 formal merge 的自动化程度，又不会过早突破当前项目的数据安全边界。

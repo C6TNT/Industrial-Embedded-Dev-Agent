@@ -138,8 +138,9 @@ ieda tools prep-real-bench --session-id <session-id> --label "<session label>"
 5. `ieda tools apply-formal-merge --dry-run`
 6. 需要预演落地结果时，再执行 `ieda tools apply-formal-merge --execute`
 7. 真正考虑 canonical merge 前，再执行 `ieda tools canonical-merge-preflight`
+8. 需要整理正式并入 patch 包时，再执行 `ieda tools canonical-patch-helper`
 
-当前这条链即使走到 `--execute`，也只会写入 staging 目录；`canonical-merge-preflight` 也只是只读预检，不会直接修改 canonical 数据文件。
+当前这条链即使走到 `--execute`，也只会写入 staging 目录；`canonical-merge-preflight` 和 `canonical-patch-helper` 也都不会直接修改 canonical 数据文件。
 
 ### 日志样本
 
