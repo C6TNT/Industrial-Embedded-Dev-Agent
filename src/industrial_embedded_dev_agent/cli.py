@@ -7,7 +7,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .analysis import analyze_text
-from .bench_pack_render import render_bench_pack_markdown
+from .bench_pack_render import render_bench_pack_markdown, render_session_bundle_markdown
 from .benchmarks import filter_benchmark_items, load_benchmark_items, summarize_benchmark
 from .chunking import build_chunks, load_chunk_documents, summarize_chunks
 from .config import get_project_paths
@@ -107,6 +107,10 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_render_parser.add_argument("input", help="Path to a bench-pack JSON file")
     tools_render_parser.add_argument("--template", choices=["first-run", "issue", "session-review"], required=True, help="Markdown draft type")
     tools_render_parser.add_argument("--output", help="Optional Markdown output path")
+
+    tools_render_session_parser = tools_subparsers.add_parser("render-session", help="Render all bench-packs under one session_id into a consolidated Markdown review")
+    tools_render_session_parser.add_argument("session_id", help="Session identifier created by tools bench-pack --session-id")
+    tools_render_session_parser.add_argument("--output", help="Optional Markdown output path")
 
     tools_plan_parser = tools_subparsers.add_parser("plan", help="Plan a tool call without executing it")
     tools_plan_parser.add_argument("request", help="Natural-language tool request")
@@ -260,6 +264,15 @@ def main() -> None:
                     paths.root,
                     Path(args.input),
                     template=args.template,
+                    output_path=Path(args.output) if args.output else None,
+                )
+            )
+            return
+        if args.tools_command == "render-session":
+            _print_json(
+                render_session_bundle_markdown(
+                    paths.root,
+                    args.session_id,
                     output_path=Path(args.output) if args.output else None,
                 )
             )
