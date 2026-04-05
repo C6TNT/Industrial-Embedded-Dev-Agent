@@ -4,6 +4,46 @@ import json
 from pathlib import Path
 
 
+def summarize_bench_sessions(root: Path) -> dict[str, object]:
+    sessions_root = root / "reports" / "bench_packs" / "sessions"
+    entries = []
+    if sessions_root.exists():
+        for session_dir in sorted([path for path in sessions_root.iterdir() if path.is_dir()]):
+            pack_paths = sorted(session_dir.glob("*.json"))
+            packs = [json.loads(path.read_text(encoding="utf-8")) for path in pack_paths]
+            rendered_bundle = _default_session_bundle_path(root, session_dir.name)
+            entries.append(
+                {
+                    "session_id": session_dir.name,
+                    "pack_count": len(pack_paths),
+                    "first_capture": packs[0].get("captured_at", "") if packs else "",
+                    "latest_capture": packs[-1].get("captured_at", "") if packs else "",
+                    "label": packs[0].get("label", "") if packs else "",
+                    "has_bundle_review": rendered_bundle.exists(),
+                    "session_dir": f"reports/bench_packs/sessions/{session_dir.name}",
+                    "bundle_review_path": f"reports/bench_packs/rendered/{rendered_bundle.name}" if rendered_bundle.exists() else "",
+                }
+            )
+    entries.sort(key=lambda item: item["latest_capture"], reverse=True)
+    return {"session_count": len(entries), "sessions": entries}
+
+
+def render_sessions_index_markdown(
+    root: Path,
+    *,
+    output_path: Path | None = None,
+) -> dict[str, object]:
+    summary = summarize_bench_sessions(root)
+    rendered = _render_sessions_index_template(summary)
+    destination = output_path or _default_sessions_index_path(root)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(rendered, encoding="utf-8")
+    return {
+        "session_count": summary["session_count"],
+        "output_path": str(destination),
+    }
+
+
 def render_session_bundle_markdown(
     root: Path,
     session_id: str,
@@ -55,6 +95,10 @@ def _default_rendered_pack_path(root: Path, input_path: Path, *, template: str) 
 
 def _default_session_bundle_path(root: Path, session_id: str) -> Path:
     return root / "reports" / "bench_packs" / "rendered" / f"{session_id}_session-bundle.md"
+
+
+def _default_sessions_index_path(root: Path) -> Path:
+    return root / "reports" / "bench_packs" / "rendered" / "sessions_index.md"
 
 
 def _render_pack_template(pack: dict[str, object], *, template: str) -> str:
@@ -148,6 +192,39 @@ def _render_session_bundle_template(session_id: str, packs: list[dict[str, objec
             "",
         ]
     )
+    return "\n".join(lines)
+
+
+def _render_sessions_index_template(summary: dict[str, object]) -> str:
+    sessions = summary.get("sessions", [])
+    lines = [
+        "# Bench Session Index",
+        "",
+        f"- Session count: {summary.get('session_count', 0)}",
+        "",
+        "## Sessions",
+        "",
+    ]
+    if not sessions:
+        lines.append("- No bench sessions captured yet.")
+        lines.append("")
+        return "\n".join(lines)
+
+    for session in sessions:
+        lines.extend(
+            [
+                f"### {session.get('session_id', '')}",
+                "",
+                f"- Label: {session.get('label', '')}",
+                f"- Pack count: {session.get('pack_count', 0)}",
+                f"- First capture: {session.get('first_capture', '')}",
+                f"- Latest capture: {session.get('latest_capture', '')}",
+                f"- Has bundle review: {session.get('has_bundle_review', False)}",
+                f"- Session dir: {session.get('session_dir', '')}",
+                f"- Bundle review path: {session.get('bundle_review_path', '')}",
+                "",
+            ]
+        )
     return "\n".join(lines)
 
 

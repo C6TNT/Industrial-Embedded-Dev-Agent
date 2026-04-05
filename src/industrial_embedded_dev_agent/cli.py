@@ -7,7 +7,12 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .analysis import analyze_text
-from .bench_pack_render import render_bench_pack_markdown, render_session_bundle_markdown
+from .bench_pack_render import (
+    render_bench_pack_markdown,
+    render_session_bundle_markdown,
+    render_sessions_index_markdown,
+    summarize_bench_sessions,
+)
 from .benchmarks import filter_benchmark_items, load_benchmark_items, summarize_benchmark
 from .chunking import build_chunks, load_chunk_documents, summarize_chunks
 from .config import get_project_paths
@@ -111,6 +116,10 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_render_session_parser = tools_subparsers.add_parser("render-session", help="Render all bench-packs under one session_id into a consolidated Markdown review")
     tools_render_session_parser.add_argument("session_id", help="Session identifier created by tools bench-pack --session-id")
     tools_render_session_parser.add_argument("--output", help="Optional Markdown output path")
+
+    tools_sessions_parser = tools_subparsers.add_parser("sessions", help="Summarize captured bench sessions")
+    tools_sessions_parser.add_argument("--render-index", action="store_true", help="Also render a Markdown index page under reports/bench_packs/rendered")
+    tools_sessions_parser.add_argument("--output", help="Optional Markdown output path when used with --render-index")
 
     tools_plan_parser = tools_subparsers.add_parser("plan", help="Plan a tool call without executing it")
     tools_plan_parser.add_argument("request", help="Natural-language tool request")
@@ -276,6 +285,17 @@ def main() -> None:
                     output_path=Path(args.output) if args.output else None,
                 )
             )
+            return
+        if args.tools_command == "sessions":
+            if args.render_index:
+                _print_json(
+                    render_sessions_index_markdown(
+                        paths.root,
+                        output_path=Path(args.output) if args.output else None,
+                    )
+                )
+                return
+            _print_json(summarize_bench_sessions(paths.root))
             return
         if args.tools_command == "plan":
             _print_json(asdict(plan_tool_request(paths.root, args.request, tool_id=args.tool_id)))
