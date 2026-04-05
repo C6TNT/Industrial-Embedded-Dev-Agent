@@ -10,6 +10,8 @@ from industrial_embedded_dev_agent.bench_pack_render import (
     render_session_bundle_markdown,
     summarize_bench_sessions,
 )
+from industrial_embedded_dev_agent.models import BenchmarkItem
+from industrial_embedded_dev_agent.runner import run_local_checks_with_options
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -126,3 +128,101 @@ def test_summarize_bench_sessions_reports_bundle_review_presence(tmp_path: Path)
     assert session["pack_count"] == 2
     assert session["has_bundle_review"] is True
     assert session["bundle_review_path"] == f"reports/bench_packs/rendered/{session_id}_session-bundle.md"
+
+
+def test_run_local_checks_without_rag(monkeypatch, tmp_path: Path) -> None:
+    items = [
+        BenchmarkItem(
+            item_id="safety-004",
+            item_type="tool_safety",
+            difficulty="easy",
+            tags=[],
+            input_payload={},
+            expected_payload={},
+        ),
+    ]
+
+    monkeypatch.setattr("industrial_embedded_dev_agent.runner.load_benchmark_items", lambda path: items)
+    monkeypatch.setattr(
+        "industrial_embedded_dev_agent.runner._run_pytest_check",
+        lambda root: {"name": "pytest", "passed": True, "details": {}},
+    )
+
+    def fake_run_benchmark(run_items, *, root, engine):
+        return {
+            "engine": engine,
+            "total": len(run_items),
+            "passed": len(run_items),
+            "failed": 0,
+            "pass_rate": 1.0,
+            "citation_passed": len(run_items),
+            "citation_pass_rate": 1.0,
+        }
+
+    monkeypatch.setattr("industrial_embedded_dev_agent.runner.run_benchmark", fake_run_benchmark)
+
+    result = run_local_checks_with_options(tmp_path)
+
+    assert result["passed"] is True
+    assert [check["name"] for check in result["checks"]] == [
+        "pytest",
+        "benchmark_rules",
+        "benchmark_tool_safety",
+    ]
+
+
+def test_run_local_checks_with_rag_filter(monkeypatch, tmp_path: Path) -> None:
+    items = [
+        BenchmarkItem(
+            item_id="qa-001",
+            item_type="knowledge_qa",
+            difficulty="easy",
+            tags=[],
+            input_payload={},
+            expected_payload={},
+        ),
+        BenchmarkItem(
+            item_id="safety-004",
+            item_type="tool_safety",
+            difficulty="easy",
+            tags=[],
+            input_payload={},
+            expected_payload={},
+        ),
+    ]
+    calls: list[tuple[str, int]] = []
+
+    monkeypatch.setattr("industrial_embedded_dev_agent.runner.load_benchmark_items", lambda path: items)
+    monkeypatch.setattr(
+        "industrial_embedded_dev_agent.runner._run_pytest_check",
+        lambda root: {"name": "pytest", "passed": True, "details": {}},
+    )
+
+    def fake_run_benchmark(run_items, *, root, engine):
+        calls.append((engine, len(run_items)))
+        return {
+            "engine": engine,
+            "total": len(run_items),
+            "passed": len(run_items),
+            "failed": 0,
+            "pass_rate": 1.0,
+            "citation_passed": len(run_items),
+            "citation_pass_rate": 1.0,
+        }
+
+    monkeypatch.setattr("industrial_embedded_dev_agent.runner.run_benchmark", fake_run_benchmark)
+
+    result = run_local_checks_with_options(tmp_path, include_rag=True, rag_item_type="tool_safety")
+
+    assert result["passed"] is True
+    assert [check["name"] for check in result["checks"]] == [
+        "pytest",
+        "benchmark_rules",
+        "benchmark_tool_safety",
+        "benchmark_rag",
+    ]
+    assert calls == [
+        ("rules", 2),
+        ("tools", 1),
+        ("rag", 1),
+    ]

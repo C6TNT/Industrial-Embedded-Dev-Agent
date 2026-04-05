@@ -47,6 +47,15 @@ def run_benchmark_from_path(path: Path, *, root: Path | None = None, engine: str
 
 
 def run_local_checks(root: Path) -> dict[str, object]:
+    return run_local_checks_with_options(root)
+
+
+def run_local_checks_with_options(
+    root: Path,
+    *,
+    include_rag: bool = False,
+    rag_item_type: str | None = None,
+) -> dict[str, object]:
     benchmark_path = root / "data" / "benchmark" / "benchmark_v1.jsonl"
     items = load_benchmark_items(benchmark_path)
 
@@ -81,6 +90,25 @@ def run_local_checks(root: Path) -> dict[str, object]:
             },
         }
     )
+
+    if include_rag:
+        rag_items = [item for item in items if rag_item_type is None or item.item_type == rag_item_type]
+        rag_summary = run_benchmark(rag_items, root=root, engine="rag")
+        checks.append(
+            {
+                "name": "benchmark_rag",
+                "passed": rag_summary["failed"] == 0,
+                "details": {
+                    "total": rag_summary["total"],
+                    "passed": rag_summary["passed"],
+                    "failed": rag_summary["failed"],
+                    "pass_rate": rag_summary["pass_rate"],
+                    "citation_passed": rag_summary.get("citation_passed"),
+                    "citation_pass_rate": rag_summary.get("citation_pass_rate"),
+                    "item_type": rag_item_type,
+                },
+            }
+        )
 
     return {
         "passed": all(check["passed"] for check in checks),

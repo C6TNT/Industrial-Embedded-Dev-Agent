@@ -21,7 +21,7 @@ from .config import get_project_paths
 from .datasets import build_dataset_overview
 from .rag import answer_with_rag
 from .retrieval import build_search_documents, search_documents
-from .runner import run_benchmark, run_local_checks
+from .runner import run_benchmark, run_local_checks_with_options
 from .taxonomy import parse_taxonomy_labels, summarize_taxonomy
 from .tools import (
     build_bench_pack,
@@ -94,7 +94,13 @@ def _build_parser() -> argparse.ArgumentParser:
     chunks_subparsers.add_parser("build", help="Build normalized document chunks under data/chunks")
     chunks_subparsers.add_parser("summary", help="Summarize the currently built chunks")
 
-    subparsers.add_parser("check", help="Run the local regression bundle: pytest, rules benchmark, and tool-safety benchmark")
+    check_parser = subparsers.add_parser("check", help="Run the local regression bundle: pytest, rules benchmark, and tool-safety benchmark")
+    check_parser.add_argument("--include-rag", action="store_true", help="Also run the RAG benchmark as part of the local check bundle")
+    check_parser.add_argument(
+        "--rag-type",
+        choices=["knowledge_qa", "log_attribution", "tool_safety"],
+        help="Optional benchmark item_type filter when --include-rag is enabled",
+    )
 
     tools_parser = subparsers.add_parser("tools", help="Inspect and invoke the guarded tool layer")
     tools_subparsers = tools_parser.add_subparsers(dest="tools_command", required=True)
@@ -251,7 +257,13 @@ def main() -> None:
             return
 
     if args.command == "check":
-        _print_json(run_local_checks(paths.root))
+        _print_json(
+            run_local_checks_with_options(
+                paths.root,
+                include_rag=args.include_rag,
+                rag_item_type=args.rag_type,
+            )
+        )
         return
 
     if args.command == "tools":
