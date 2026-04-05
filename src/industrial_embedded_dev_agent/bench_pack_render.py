@@ -94,7 +94,8 @@ def render_session_bundle_markdown(
         raise FileNotFoundError(f"No bench packs found under session '{session_id}'.")
 
     packs = [_normalize_render_payload(json.loads(path.read_text(encoding="utf-8"))) for path in pack_paths]
-    rendered = _render_session_bundle_template(session_id, packs)
+    latest_diff = _build_pack_diff_summary(packs[-2], packs[-1]) if len(packs) >= 2 else None
+    rendered = _render_session_bundle_template(session_id, packs, latest_diff=latest_diff)
     destination = output_path or _default_session_bundle_path(root, session_id)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(rendered, encoding="utf-8")
@@ -153,7 +154,12 @@ def _render_pack_template(pack: dict[str, object], *, template: str) -> str:
     raise ValueError(f"Unsupported template: {template}")
 
 
-def _render_session_bundle_template(session_id: str, packs: list[dict[str, object]]) -> str:
+def _render_session_bundle_template(
+    session_id: str,
+    packs: list[dict[str, object]],
+    *,
+    latest_diff: dict[str, object] | None = None,
+) -> str:
     first = packs[0]
     label = str(first.get("label", ""))
     latest = packs[-1]
@@ -199,6 +205,34 @@ def _render_session_bundle_template(session_id: str, packs: list[dict[str, objec
             "",
             *[f"- {item}" for item in blockers],
             "",
+        ]
+    )
+    if latest_diff is not None:
+        lines.extend(
+            [
+                "## Latest Change Snapshot",
+                "",
+                f"- Compared captures: {latest_diff.get('left_capture', '')} -> {latest_diff.get('right_capture', '')}",
+                f"- Transport change: {latest_diff.get('transport_changed', False)} ({latest_diff.get('left_transport_state', '')} -> {latest_diff.get('right_transport_state', '')})",
+                f"- Parsed status change: {latest_diff.get('status_changed', False)} ({latest_diff.get('left_status', '')} -> {latest_diff.get('right_status', '')})",
+            ]
+        )
+        changed_axes = [item for item in latest_diff.get("axis_diffs", []) if item.get("changed")]
+        if changed_axes:
+            lines.append("- Changed axes: " + ", ".join(f"axis{item.get('axis_id', '')}" for item in changed_axes))
+        else:
+            lines.append("- Changed axes: none")
+        lines.append("- Latest observations:")
+        for item in latest_diff.get("observations", []):
+            lines.append(f"  - {item}")
+        lines.extend(
+            [
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
             "## Pack Timeline",
             "",
         ]
