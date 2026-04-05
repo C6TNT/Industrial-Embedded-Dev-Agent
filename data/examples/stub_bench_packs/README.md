@@ -22,6 +22,11 @@ This folder contains normalized no-hardware bench-pack examples for offline regr
 - `sample_nominal.json` vs `sample_open_rpmsg_fail.json`
   Transport degradation rehearsal.
 
+See also:
+
+- `sample_compare_matrix.md`
+  A fixed compare checklist with expected deltas and suggested commands.
+
 ## Notes
 
 - These are curated examples, not raw bench captures.
