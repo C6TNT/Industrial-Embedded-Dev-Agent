@@ -14,7 +14,7 @@ from industrial_embedded_dev_agent.bench_pack_render import (
 )
 from industrial_embedded_dev_agent.models import BenchmarkItem
 from industrial_embedded_dev_agent.runner import run_local_checks_with_options
-from industrial_embedded_dev_agent.tools import finish_real_bench, kickoff_real_bench, plan_pending_merge, prepare_formal_merge_assistant, prepare_real_bench_package, promote_finish_candidates, review_finish_candidates
+from industrial_embedded_dev_agent.tools import apply_formal_merge, finish_real_bench, kickoff_real_bench, plan_pending_merge, prepare_formal_merge_assistant, prepare_real_bench_package, promote_finish_candidates, review_finish_candidates
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -786,5 +786,59 @@ def test_prepare_formal_merge_assistant_generates_draft_merge_bundle(tmp_path: P
         assert assistant_payload["counts"]["benchmark_candidates"] >= 1
         assert "## Recommended Merge Order" in assistant_text
         assert len(benchmark_lines) >= 1
+    finally:
+        _reset_pending_root()
+
+
+def test_apply_formal_merge_generates_dry_run_summary(tmp_path: Path) -> None:
+    session_id = "bench-am-11"
+    session_dir = REPO_ROOT / "reports" / "bench_packs" / "sessions" / session_id
+    if session_dir.exists():
+        shutil.rmtree(session_dir)
+
+    _reset_pending_root()
+    try:
+        prep = prepare_real_bench_package(
+            REPO_ROOT,
+            session_id=session_id,
+            label="Morning bench apply formal merge",
+            output_dir=tmp_path / "prep_bundle",
+        )
+
+        kickoff_real_bench(
+            REPO_ROOT,
+            Path(prep["plan_seed_path"]),
+            execute=False,
+            render_first_run=True,
+            render_session_review=True,
+        )
+        finish_real_bench(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        review_finish_candidates(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        promote_finish_candidates(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+
+        result = apply_formal_merge(REPO_ROOT, dry_run=True)
+        summary_json = Path(result["apply_formal_merge_json"])
+        summary_md = Path(result["apply_formal_merge_markdown"])
+        payload = json.loads(summary_json.read_text(encoding="utf-8"))
+        text = summary_md.read_text(encoding="utf-8")
+
+        assert summary_json.exists()
+        assert summary_md.exists()
+        assert payload["dry_run"] is True
+        assert len(payload["planned_actions"]["benchmark_appends"]) >= 1
+        assert "## Benchmark Appends" in text
+        assert "Dry-run only" in text
     finally:
         _reset_pending_root()

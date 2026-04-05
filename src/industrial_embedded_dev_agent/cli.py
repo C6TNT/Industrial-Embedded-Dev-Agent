@@ -32,6 +32,7 @@ from .tools import (
     kickoff_real_bench,
     list_stub_scenarios,
     list_tools,
+    apply_formal_merge,
     prepare_formal_merge_assistant,
     plan_pending_merge,
     plan_tool_request,
@@ -131,6 +132,8 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_promote_candidates_parser.add_argument("--prep-dir", help="Optional prep bundle directory if it is not under reports/real_bench_prep/<session_id>")
     tools_subparsers.add_parser("plan-pending-merge", help="Generate a merge plan for items currently staged under data/pending")
     tools_subparsers.add_parser("prepare-formal-merge", help="Generate draft bundles and append-ready files for curated formal dataset updates")
+    tools_apply_formal_merge_parser = tools_subparsers.add_parser("apply-formal-merge", help="Prepare a dry-run summary of how pending items would be merged into canonical data")
+    tools_apply_formal_merge_parser.add_argument("--dry-run", action="store_true", help="Explicitly run in dry-run mode (the only supported mode in v1)")
     tools_kickoff_real_parser = tools_subparsers.add_parser("kickoff-real-bench", help="Read a real-bench plan seed and create the first read-only bench-pack")
     tools_kickoff_real_parser.add_argument("seed", help="Path to a generated plan_seed.json")
     tools_kickoff_real_parser.add_argument("--execute", action="store_true", help="Actually execute the seeded read-only request")
@@ -352,6 +355,9 @@ def main() -> None:
             return
         if args.tools_command == "prepare-formal-merge":
             _print_json(prepare_formal_merge_assistant(paths.root))
+            return
+        if args.tools_command == "apply-formal-merge":
+            _print_json(apply_formal_merge(paths.root, dry_run=True))
             return
         if args.tools_command == "kickoff-real-bench":
             render_first_run = args.render_first_run or args.render_all
