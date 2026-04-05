@@ -11,7 +11,8 @@
 - 再放进 pending 区
 - 再生成 merge plan
 - 再生成 formal merge assistant
-- 再做 apply dry-run
+- 再做 apply dry-run / staging execute
+- 最后在考虑 canonical merge 之前先跑 preflight
 
 当前版本仍然不会直接改这些正式文件：
 
@@ -155,6 +156,31 @@ ieda tools apply-formal-merge --execute
 - 你想先看到一份接近“真实 merge 前形态”的 staging 包
 - 但你还不希望工具直接写入 `data/materials/` 或 `data/benchmark/`
 
+### 8. 执行 canonical merge preflight
+
+```bash
+ieda tools canonical-merge-preflight
+```
+
+这一步仍然是只读检查，不会写 canonical 数据。
+
+它当前会检查：
+
+- `data/benchmark/benchmark_v1.jsonl` 是否存在
+- `data/materials/material_index_v1.md` 是否存在
+- benchmark append 候选是否有重复 `id`
+- material index 拟追加条目是否与现有内容冲突
+- staging 包是否完整
+- 当前 pending 区是否真的存在候选内容
+
+输出：
+
+- `data/pending/formal_merge_assistant/canonical_merge_preflight.json`
+- `data/pending/formal_merge_assistant/canonical_merge_preflight.md`
+
+如果当前仓库里还没有待并入的 pending/staging 数据，那么这一步返回 `passed=false` 是正常的。
+这代表“当前并入前提不满足”，不是工具本身出了故障。
+
 ---
 
 ## 推荐人工审阅顺序
@@ -167,6 +193,7 @@ ieda tools apply-formal-merge --execute
 4. `data/pending/formal_merge_assistant/apply_formal_merge_dry_run.md`
 5. `data/pending/formal_merge_assistant/recommended_commit_split.md`
 6. `data/pending/formal_merge_assistant/staging/staging_summary.json`
+7. `data/pending/formal_merge_assistant/canonical_merge_preflight.md`
 
 如果要进一步做实际并入，建议再分别查看：
 
@@ -187,6 +214,7 @@ ieda tools apply-formal-merge --execute
 - 不自动改 `data/benchmark/benchmark_v1.jsonl`
 - 不自动删除 pending 区候选
 - `--execute` 也只会写到 `data/pending/formal_merge_assistant/staging/`
+- `canonical-merge-preflight` 只做只读预检
 
 也就是说，当前工具会尽可能把“正式并入前的准备工作”做完，但最后的 canonical 数据修改仍然保留给人工确认。
 
@@ -225,7 +253,7 @@ ieda tools apply-formal-merge --execute
 
 如果后面要继续推进，最自然的方向是：
 
-1. 在人工确认过 staging 结果之后，再决定是否引入“canonical merge helper”
+1. 在人工确认过 staging 结果和 preflight 结果之后，再决定是否引入“canonical merge helper”
 2. 继续保持 benchmark 变更和 materials 变更分 commit 审阅
 
 这样既能提高 formal merge 的自动化程度，又不会过早突破当前项目的数据安全边界。

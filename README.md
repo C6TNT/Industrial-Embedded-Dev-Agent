@@ -220,6 +220,7 @@ ieda tools plan-pending-merge
 ieda tools prepare-formal-merge
 ieda tools apply-formal-merge --dry-run
 ieda tools apply-formal-merge --execute
+ieda tools canonical-merge-preflight
 ```
 
 完整说明见：
@@ -230,6 +231,7 @@ ieda tools apply-formal-merge --execute
 
 - 会生成候选审核、merge plan、append patch 建议
 - `--execute` 也只会写到 staging 目录
+- `canonical-merge-preflight` 只做只读预检
 - 不会直接修改 `data/materials/`、`data/materials/material_index_v1.md`、`data/benchmark/benchmark_v1.jsonl`
 
 ## 路线图
