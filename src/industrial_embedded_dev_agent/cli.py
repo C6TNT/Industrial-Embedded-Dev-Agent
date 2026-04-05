@@ -7,6 +7,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .analysis import analyze_text
+from .bench_pack_render import render_bench_pack_markdown
 from .benchmarks import filter_benchmark_items, load_benchmark_items, summarize_benchmark
 from .chunking import build_chunks, load_chunk_documents, summarize_chunks
 from .config import get_project_paths
@@ -22,7 +23,6 @@ from .tools import (
     inspect_wsl_environment,
     list_tools,
     plan_tool_request,
-    render_bench_pack_markdown,
     run_tool_request,
     setup_wsl_stub_environment,
 )
@@ -103,7 +103,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     tools_render_parser = tools_subparsers.add_parser("render-pack", help="Render a bench-pack JSON into a Markdown draft")
     tools_render_parser.add_argument("input", help="Path to a bench-pack JSON file")
-    tools_render_parser.add_argument("--template", choices=["first-run", "issue"], required=True, help="Markdown draft type")
+    tools_render_parser.add_argument("--template", choices=["first-run", "issue", "session-review"], required=True, help="Markdown draft type")
     tools_render_parser.add_argument("--output", help="Optional Markdown output path")
 
     tools_plan_parser = tools_subparsers.add_parser("plan", help="Plan a tool call without executing it")
