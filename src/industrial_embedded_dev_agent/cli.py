@@ -21,7 +21,7 @@ from .config import get_project_paths
 from .datasets import build_dataset_overview
 from .rag import answer_with_rag
 from .retrieval import build_search_documents, search_documents
-from .runner import run_benchmark
+from .runner import run_benchmark, run_local_checks
 from .taxonomy import parse_taxonomy_labels, summarize_taxonomy
 from .tools import (
     build_bench_pack,
@@ -93,6 +93,8 @@ def _build_parser() -> argparse.ArgumentParser:
     chunks_subparsers = chunks_parser.add_subparsers(dest="chunks_command", required=True)
     chunks_subparsers.add_parser("build", help="Build normalized document chunks under data/chunks")
     chunks_subparsers.add_parser("summary", help="Summarize the currently built chunks")
+
+    subparsers.add_parser("check", help="Run the local regression bundle: pytest, rules benchmark, and tool-safety benchmark")
 
     tools_parser = subparsers.add_parser("tools", help="Inspect and invoke the guarded tool layer")
     tools_subparsers = tools_parser.add_subparsers(dest="tools_command", required=True)
@@ -247,6 +249,10 @@ def main() -> None:
             chunks = load_chunk_documents(chunk_output)
             _print_json(summarize_chunks(chunks))
             return
+
+    if args.command == "check":
+        _print_json(run_local_checks(paths.root))
+        return
 
     if args.command == "tools":
         if args.tools_command == "list":

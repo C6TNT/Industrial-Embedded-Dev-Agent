@@ -6,6 +6,7 @@ from pathlib import Path
 from industrial_embedded_dev_agent.bench_pack_render import (
     compare_bench_packs,
     compare_latest_bench_packs_in_session,
+    render_bench_pack_markdown,
     render_session_bundle_markdown,
     summarize_bench_sessions,
 )
@@ -82,6 +83,33 @@ def test_render_session_bundle_includes_latest_change_snapshot(tmp_path: Path) -
     assert "## Latest Change Snapshot" in rendered
     assert "Changed axes: axis1" in rendered
     assert "Transport change: False (readable -> readable)" in rendered
+
+
+def test_render_pack_first_run_includes_session_fields(tmp_path: Path) -> None:
+    result = render_bench_pack_markdown(
+        tmp_path,
+        SAMPLES_ROOT / "sample_nominal.json",
+        template="first-run",
+    )
+    rendered = Path(result["output_path"]).read_text(encoding="utf-8")
+
+    assert "Session ID: stub-sample-set-v1" in rendered
+    assert "Session label: Stub sample set" in rendered
+    assert "## Axis 0" in rendered
+    assert "## Axis 1" in rendered
+
+
+def test_render_pack_issue_includes_raw_evidence_block(tmp_path: Path) -> None:
+    result = render_bench_pack_markdown(
+        tmp_path,
+        SAMPLES_ROOT / "sample_open_rpmsg_fail.json",
+        template="issue",
+    )
+    rendered = Path(result["output_path"]).read_text(encoding="utf-8")
+
+    assert "## Raw Evidence" in rendered
+    assert '"stub_scenario": "open_rpmsg_fail"' in rendered
+    assert "parsed status: ok" in rendered
 
 
 def test_summarize_bench_sessions_reports_bundle_review_presence(tmp_path: Path) -> None:

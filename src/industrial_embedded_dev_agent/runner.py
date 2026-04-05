@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from dataclasses import asdict
 from pathlib import Path
 
@@ -42,6 +44,63 @@ def run_benchmark(
 
 def run_benchmark_from_path(path: Path, *, root: Path | None = None, engine: str = "rules") -> dict[str, object]:
     return run_benchmark(load_benchmark_items(path), root=root, engine=engine)
+
+
+def run_local_checks(root: Path) -> dict[str, object]:
+    benchmark_path = root / "data" / "benchmark" / "benchmark_v1.jsonl"
+    items = load_benchmark_items(benchmark_path)
+
+    checks: list[dict[str, object]] = []
+    checks.append(_run_pytest_check(root))
+
+    rules_summary = run_benchmark(items, root=root, engine="rules")
+    checks.append(
+        {
+            "name": "benchmark_rules",
+            "passed": rules_summary["failed"] == 0,
+            "details": {
+                "total": rules_summary["total"],
+                "passed": rules_summary["passed"],
+                "failed": rules_summary["failed"],
+                "pass_rate": rules_summary["pass_rate"],
+            },
+        }
+    )
+
+    tool_items = [item for item in items if item.item_type == "tool_safety"]
+    tools_summary = run_benchmark(tool_items, root=root, engine="tools")
+    checks.append(
+        {
+            "name": "benchmark_tool_safety",
+            "passed": tools_summary["failed"] == 0,
+            "details": {
+                "total": tools_summary["total"],
+                "passed": tools_summary["passed"],
+                "failed": tools_summary["failed"],
+                "pass_rate": tools_summary["pass_rate"],
+            },
+        }
+    )
+
+    return {
+        "passed": all(check["passed"] for check in checks),
+        "checks": checks,
+    }
+
+
+def _run_pytest_check(root: Path) -> dict[str, object]:
+    command = [sys.executable, "-m", "pytest", "tests", "-q"]
+    completed = subprocess.run(command, cwd=str(root), capture_output=True, text=True)
+    return {
+        "name": "pytest",
+        "passed": completed.returncode == 0,
+        "details": {
+            "command": command,
+            "returncode": completed.returncode,
+            "stdout": completed.stdout[-4000:],
+            "stderr": completed.stderr[-4000:],
+        },
+    }
 
 
 def _evaluate_item(item: BenchmarkItem, *, root: Path | None, engine: str) -> dict[str, object]:
