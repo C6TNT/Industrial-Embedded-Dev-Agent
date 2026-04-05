@@ -301,19 +301,22 @@ def test_prepare_real_bench_package_generates_bundle(tmp_path: Path) -> None:
     output_dir = Path(result["output_dir"])
     assert result["session_id"] == "bench-am-01"
     assert output_dir.exists()
-    assert len(result["files"]) == 6
+    assert len(result["files"]) == 7
 
     doctor_snapshot = output_dir / "doctor_snapshot.json"
+    plan_seed = output_dir / "plan_seed.json"
     index_text = (output_dir / "00_index.md").read_text(encoding="utf-8")
     readiness_text = (output_dir / "01_readiness_checklist.md").read_text(encoding="utf-8")
     review_text = (output_dir / "04_session_review.md").read_text(encoding="utf-8")
     doctor_payload = json.loads(doctor_snapshot.read_text(encoding="utf-8"))
+    seed_payload = json.loads(plan_seed.read_text(encoding="utf-8"))
 
     assert "Session ID: bench-am-01" in index_text
     assert "Git branch:" in index_text
     assert "Git commit:" in index_text
     assert "## Current Runtime Snapshot" in index_text
     assert "doctor_snapshot.json" in index_text
+    assert "plan_seed.json" in index_text
     assert "tools use-real" in index_text
     assert "Source template: real_bench_readiness_checklist.md" in readiness_text
     assert "Session label: Morning bench" in review_text
@@ -321,3 +324,9 @@ def test_prepare_real_bench_package_generates_bundle(tmp_path: Path) -> None:
     assert doctor_payload["label"] == "Morning bench"
     assert "doctor" in doctor_payload
     assert "git_context" in doctor_payload
+    assert seed_payload["session_id"] == "bench-am-01"
+    assert seed_payload["expected_tool_id"] == "SCRIPT-004"
+    assert seed_payload["expected_risk_level"] == "L0_readonly"
+    assert "axis0/axis1" in seed_payload["request"]
+    assert "tools plan" in seed_payload["commands"]["plan"]
+    assert "--session-id bench-am-01" in seed_payload["commands"]["bench_pack"]

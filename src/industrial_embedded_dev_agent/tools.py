@@ -219,6 +219,28 @@ def prepare_real_bench_package(
     doctor_snapshot_path.write_text(json.dumps(doctor_snapshot_payload, ensure_ascii=False, indent=2), encoding="utf-8")
     written_files.append(str(doctor_snapshot_path))
 
+    seed_request = "先读一下 axis0/axis1 的状态字、错误码和编码器，我要看当前链路是不是还活着。"
+    plan_seed_path = destination / "plan_seed.json"
+    plan_seed_payload = {
+        "session_id": resolved_session_id,
+        "label": label,
+        "generated_at": timestamp.isoformat(),
+        "request": seed_request,
+        "expected_tool_id": "SCRIPT-004",
+        "expected_risk_level": "L0_readonly",
+        "expected_allowed_to_execute": True,
+        "commands": {
+            "plan": f'python -m industrial_embedded_dev_agent tools plan "{seed_request}"',
+            "run": f'python -m industrial_embedded_dev_agent tools run "{seed_request}" --execute',
+            "bench_pack": (
+                f'python -m industrial_embedded_dev_agent tools bench-pack "{seed_request}" '
+                f'--session-id {resolved_session_id}'
+            ),
+        },
+    }
+    plan_seed_path.write_text(json.dumps(plan_seed_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    written_files.append(str(plan_seed_path))
+
     for file_name, content in templates.items():
         file_path = destination / file_name
         file_path.write_text(content, encoding="utf-8")
@@ -231,6 +253,7 @@ def prepare_real_bench_package(
         "doctor": doctor,
         "git_context": git_context,
         "doctor_snapshot_path": str(doctor_snapshot_path),
+        "plan_seed_path": str(plan_seed_path),
         "files": written_files,
     }
 
@@ -720,6 +743,7 @@ def _render_real_bench_index(
         f"- python3_available: {doctor.get('python3_available', '')}",
         f"- stub_library_present: {doctor.get('stub_library_present', '')}",
         "- Machine-readable snapshot: `doctor_snapshot.json`",
+        "- Machine-readable first-step seed: `plan_seed.json`",
         "",
         "## Recommended Order",
         "",
@@ -736,6 +760,8 @@ def _render_real_bench_index(
         "python -m industrial_embedded_dev_agent tools plan \"先读一下 axis0/axis1 的状态字、错误码和编码器，我要看当前链路是不是还活着。\"",
         "python -m industrial_embedded_dev_agent tools run \"先读一下 axis0/axis1 的状态字、错误码和编码器，我要看当前链路是不是还活着。\" --execute",
         "```",
+        "",
+        "The same first-step commands are also stored in `plan_seed.json` for machine-readable reuse.",
         "",
     ]
     return "\n".join(lines)
