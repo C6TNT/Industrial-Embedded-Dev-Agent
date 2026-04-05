@@ -1,0 +1,112 @@
+{
+  "pack_type": "bench_pack_v1",
+  "captured_at": "2026-04-05T12:54:10+08:00",
+  "request": "run tmp_probe_can_heartbeat.py and capture an OpenRpmsg failure snapshot",
+  "tool_id_override": null,
+  "session_id": "stub-sample-set-v1",
+  "label": "Stub sample set",
+  "mode": {
+    "mode": "stub",
+    "summary": "Current tool execution runs through the no-hardware stub wrapper.",
+    "environment": {
+      "wsl_available": true,
+      "python3_available": true,
+      "gcc_available": false,
+      "execution_mode": "stub",
+      "stub_mode_enabled": true,
+      "stub_scenario": "open_rpmsg_fail",
+      "stub_scenario_description": "Transport initialization degrades immediately and OpenRpmsg returns a failure code.",
+      "real_mode_ready": false,
+      "stub_library_path": "/home/librobot.so.1.0.0",
+      "stub_library_present": false,
+      "stub_library_file_info": ""
+    }
+  },
+  "doctor": {
+    "wsl_available": true,
+    "python3_available": true,
+    "gcc_available": false,
+    "execution_mode": "stub",
+    "stub_mode_enabled": true,
+    "stub_scenario": "open_rpmsg_fail",
+    "stub_scenario_description": "Transport initialization degrades immediately and OpenRpmsg returns a failure code.",
+    "real_mode_ready": false,
+    "stub_library_path": "/home/librobot.so.1.0.0",
+    "stub_library_present": false,
+    "stub_library_file_info": ""
+  },
+  "result": {
+    "plan": {
+      "request": "run tmp_probe_can_heartbeat.py and capture an OpenRpmsg failure snapshot",
+      "summary": "这是低风险状态采集请求，适合先跑状态快照和 heartbeat 采集，再汇总结论。",
+      "tool_id": "SCRIPT-004",
+      "tool_name": "probe_can_heartbeat",
+      "risk_level": "L1_low_risk_exec",
+      "allowed_to_execute": true,
+      "requires_confirmation": false,
+      "should_refuse": false,
+      "command_preview": [
+        "wsl.exe",
+        "python3",
+        "scripts/wsl/run_with_stub.py",
+        "资料/imxSoem-motion-control/tmp_probe_can_heartbeat.py"
+      ],
+      "reason": "Matched SCRIPT-004 because it is the low-risk snapshot tool for heartbeat and axis-state collection. Current execution mode: stub.",
+      "evidence": [
+        "heartbeat"
+      ]
+    },
+    "execution": {
+      "tool_id": "SCRIPT-004",
+      "command": [
+        "wsl.exe",
+        "python3",
+        "scripts/wsl/run_with_stub.py",
+        "资料/imxSoem-motion-control/tmp_probe_can_heartbeat.py"
+      ],
+      "executed": true,
+      "returncode": 0,
+      "stdout": "OpenRpmsg -1\nPOLL 8\nAXIS 0 errorRet=-1 errorCode=0 statusRet=-1 statusCode=0 axisRet=-1 axisStatus=0 encoderRet=-1 encoder=0\nAXIS 1 errorRet=-1 errorCode=0 statusRet=-1 statusCode=0 axisRet=-1 axisStatus=0 encoderRet=-1 encoder=0\n",
+      "stderr": "",
+      "risk_level": "L1_low_risk_exec",
+      "parsed_output": {
+        "status": "ok",
+        "summary": "OpenRpmsg=-1; polls=8; axis0: statusCode=0 axisStatus=0 encoder=0; axis1: statusCode=0 axisStatus=0 encoder=0",
+        "open_rpmsg_return": -1,
+        "poll_count": 8,
+        "transport_state": "unverified",
+        "axes": {
+          "0": {
+            "error_ret": -1,
+            "error_code": 0,
+            "status_ret": -1,
+            "status_code": 0,
+            "axis_ret": -1,
+            "axis_status": 0,
+            "encoder_ret": -1,
+            "encoder": 0
+          },
+          "1": {
+            "error_ret": -1,
+            "error_code": 0,
+            "status_ret": -1,
+            "status_code": 0,
+            "axis_ret": -1,
+            "axis_status": 0,
+            "encoder_ret": -1,
+            "encoder": 0
+          }
+        },
+        "axis_health": {
+          "0": "readback received, but state needs manual interpretation",
+          "1": "readback received, but state needs manual interpretation"
+        },
+        "observations": [
+          "axis0: readback received, but state needs manual interpretation, statusCode=0, axisStatus=0, encoder=0",
+          "axis1: readback received, but state needs manual interpretation, statusCode=0, axisStatus=0, encoder=0"
+        ],
+        "next_action": "Re-check the WSL transport path and runtime setup before treating this as a valid bench snapshot."
+      }
+    }
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "pack_type": "bench_pack_v1",
+  "captured_at": "2026-04-05T12:53:47+08:00",
+  "request": "run tmp_probe_can_heartbeat.py and capture an axis1 fault snapshot",
+  "tool_id_override": null,
+  "session_id": "stub-sample-set-v1",
+  "label": "Stub sample set",
+  "mode": {
+    "mode": "stub",
+    "summary": "Current tool execution runs through the no-hardware stub wrapper.",
+    "environment": {
+      "wsl_available": true,
+      "python3_available": true,
+      "gcc_available": false,
+      "execution_mode": "stub",
+      "stub_mode_enabled": true,
+      "stub_scenario": "axis1_fault",
+      "stub_scenario_description": "Transport stays readable, while axis1 reports a non-zero error code and abnormal status.",
+      "real_mode_ready": false,
+      "stub_library_path": "/home/librobot.so.1.0.0",
+      "stub_library_present": false,
+      "stub_library_file_info": ""
+    }
+  },
+  "doctor": {
+    "wsl_available": true,
+    "python3_available": true,
+    "gcc_available": false,
+    "execution_mode": "stub",
+    "stub_mode_enabled": true,
+    "stub_scenario": "axis1_fault",
+    "stub_scenario_description": "Transport stays readable, while axis1 reports a non-zero error code and abnormal status.",
+    "real_mode_ready": false,
+    "stub_library_path": "/home/librobot.so.1.0.0",
+    "stub_library_present": false,
+    "stub_library_file_info": ""
+  },
+  "result": {
+    "plan": {
+      "request": "run tmp_probe_can_heartbeat.py and capture an axis1 fault snapshot",
+      "summary": "这是低风险状态采集请求，适合先跑状态快照和 heartbeat 采集，再汇总结论。",
+      "tool_id": "SCRIPT-004",
+      "tool_name": "probe_can_heartbeat",
+      "risk_level": "L1_low_risk_exec",
+      "allowed_to_execute": true,
+      "requires_confirmation": false,
+      "should_refuse": false,
+      "command_preview": [
+        "wsl.exe",
+        "python3",
+        "scripts/wsl/run_with_stub.py",
+        "资料/imxSoem-motion-control/tmp_probe_can_heartbeat.py"
+      ],
+      "reason": "Matched SCRIPT-004 because it is the low-risk snapshot tool for heartbeat and axis-state collection. Current execution mode: stub.",
+      "evidence": [
+        "heartbeat"
+      ]
+    },
+    "execution": {
+      "tool_id": "SCRIPT-004",
+      "command": [
+        "wsl.exe",
+        "python3",
+        "scripts/wsl/run_with_stub.py",
+        "资料/imxSoem-motion-control/tmp_probe_can_heartbeat.py"
+      ],
+      "executed": true,
+      "returncode": 0,
+      "stdout": "OpenRpmsg 0\nPOLL 8\nAXIS 0 errorRet=0 errorCode=0 statusRet=0 statusCode=33 axisRet=0 axisStatus=4097 encoderRet=0 encoder=1008\nAXIS 1 errorRet=0 errorCode=16 statusRet=0 statusCode=144 axisRet=0 axisStatus=9473 encoderRet=0 encoder=8\n",
+      "stderr": "",
+      "risk_level": "L1_low_risk_exec",
+      "parsed_output": {
+        "status": "ok",
+        "summary": "OpenRpmsg=0; polls=8; axis0: statusCode=33 axisStatus=4097 encoder=1008; axis1: statusCode=144 axisStatus=9473 encoder=8",
+        "open_rpmsg_return": 0,
+        "poll_count": 8,
+        "transport_state": "readable",
+        "axes": {
+          "0": {
+            "error_ret": 0,
+            "error_code": 0,
+            "status_ret": 0,
+            "status_code": 33,
+            "axis_ret": 0,
+            "axis_status": 4097,
+            "encoder_ret": 0,
+            "encoder": 1008
+          },
+          "1": {
+            "error_ret": 0,
+            "error_code": 16,
+            "status_ret": 0,
+            "status_code": 144,
+            "axis_ret": 0,
+            "axis_status": 9473,
+            "encoder_ret": 0,
+            "encoder": 8
+          }
+        },
+        "axis_health": {
+          "0": "idle but readable",
+          "1": "drive reports non-zero error code"
+        },
+        "observations": [
+          "axis0: idle but readable, statusCode=33, axisStatus=4097, encoder=1008",
+          "axis1: drive reports non-zero error code, statusCode=144, axisStatus=9473, encoder=8"
+        ],
+        "next_action": "Preserve this pack, compare it against a nominal baseline, and cross-check axis1 against vendor-tool or SDO readback on the real bench."
+      }
+    }
+  }
+}
