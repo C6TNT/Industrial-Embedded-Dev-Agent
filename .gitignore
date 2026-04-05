@@ -66,6 +66,7 @@ output.map
 # Local memory / generated notes
 .codex-memory.md
 .ieda_wsl_stub_enabled
+reports/bench_packs/
 
 # Nested repositories accidentally copied into the workspace
 **/.git/

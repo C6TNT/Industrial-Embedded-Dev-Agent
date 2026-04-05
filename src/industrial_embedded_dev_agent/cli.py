@@ -16,6 +16,7 @@ from .retrieval import build_search_documents, search_documents
 from .runner import run_benchmark
 from .taxonomy import parse_taxonomy_labels, summarize_taxonomy
 from .tools import (
+    build_bench_pack,
     disable_wsl_stub_environment,
     get_execution_mode,
     inspect_wsl_environment,
@@ -91,6 +92,13 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_subparsers.add_parser("doctor", help="Inspect the local WSL execution environment")
     tools_subparsers.add_parser("setup-stub", help="Enable the no-hardware WSL stub mode for local testing")
     tools_subparsers.add_parser("use-real", help="Disable stub mode and switch back to real-hardware execution")
+
+    tools_pack_parser = tools_subparsers.add_parser("bench-pack", help="Capture mode, doctor, plan, and execution into one JSON bundle")
+    tools_pack_parser.add_argument("request", help="Natural-language tool request")
+    tools_pack_parser.add_argument("--tool", dest="tool_id", help="Force a specific tool_id")
+    tools_pack_parser.add_argument("--no-execute", action="store_true", help="Capture plan-only without actual execution")
+    tools_pack_parser.add_argument("--timeout", type=int, default=20, help="Execution timeout in seconds")
+    tools_pack_parser.add_argument("--output", help="Optional JSON output path")
 
     tools_plan_parser = tools_subparsers.add_parser("plan", help="Plan a tool call without executing it")
     tools_plan_parser.add_argument("request", help="Natural-language tool request")
@@ -223,6 +231,18 @@ def main() -> None:
             return
         if args.tools_command == "use-real":
             _print_json(disable_wsl_stub_environment(paths.root))
+            return
+        if args.tools_command == "bench-pack":
+            _print_json(
+                build_bench_pack(
+                    paths.root,
+                    args.request,
+                    tool_id=args.tool_id,
+                    execute=not args.no_execute,
+                    timeout_seconds=args.timeout,
+                    output_path=Path(args.output) if args.output else None,
+                )
+            )
             return
         if args.tools_command == "plan":
             _print_json(asdict(plan_tool_request(paths.root, args.request, tool_id=args.tool_id)))

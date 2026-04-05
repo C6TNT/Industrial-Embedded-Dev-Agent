@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 from .analysis import analyze_text
 from .models import ToolExecutionResult, ToolPlan, ToolSpec
@@ -124,6 +127,43 @@ def disable_wsl_stub_environment(root: Path) -> dict[str, object]:
     else:
         message = "Stub mode was already disabled."
     return {"status": "ok", "message": message, "environment": inspect_wsl_environment(root)}
+
+
+def build_bench_pack(
+    root: Path,
+    request: str,
+    *,
+    tool_id: str | None = None,
+    execute: bool = True,
+    timeout_seconds: int = 20,
+    output_path: Path | None = None,
+) -> dict[str, object]:
+    timestamp = datetime.now().astimezone()
+    mode = get_execution_mode(root)
+    doctor = inspect_wsl_environment(root)
+    result = run_tool_request(
+        root,
+        request,
+        tool_id=tool_id,
+        execute=execute,
+        timeout_seconds=timeout_seconds,
+    )
+
+    pack = {
+        "pack_type": "bench_pack_v1",
+        "captured_at": timestamp.isoformat(),
+        "request": request,
+        "tool_id_override": tool_id,
+        "mode": mode,
+        "doctor": doctor,
+        "result": result,
+    }
+
+    destination = output_path or _default_bench_pack_path(root, timestamp)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(pack, ensure_ascii=False, indent=2), encoding="utf-8")
+    pack["saved_to"] = str(destination)
+    return pack
 
 
 def plan_tool_request(root: Path, request: str, *, tool_id: str | None = None) -> ToolPlan:
@@ -487,3 +527,9 @@ def _describe_axis_snapshot(payload: dict[str, int]) -> str:
     if payload["status_code"] == 39 or payload["axis_status"] >= 8193:
         return "appears enabled or moving"
     return "readback received, but state needs manual interpretation"
+
+
+def _default_bench_pack_path(root: Path, timestamp: datetime) -> Path:
+    stamp = timestamp.strftime("%Y%m%d_%H%M%S_%f")
+    suffix = uuid4().hex[:8]
+    return root / "reports" / "bench_packs" / f"bench_pack_{stamp}_{suffix}.json"
