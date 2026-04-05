@@ -263,6 +263,7 @@ def kickoff_real_bench(
     seed_path: Path,
     *,
     execute: bool = False,
+    render_first_run: bool = False,
     timeout_seconds: int = 20,
 ) -> dict[str, object]:
     seed = json.loads(seed_path.read_text(encoding="utf-8"))
@@ -278,7 +279,7 @@ def kickoff_real_bench(
         execute=execute,
         timeout_seconds=timeout_seconds,
     )
-    return {
+    payload = {
         "seed_path": str(seed_path),
         "request": request,
         "session_id": session_id,
@@ -286,6 +287,15 @@ def kickoff_real_bench(
         "execute": execute,
         "bench_pack": bench_pack,
     }
+    if render_first_run:
+        from .bench_pack_render import render_bench_pack_markdown as render_bench_pack_draft
+
+        payload["rendered_first_run"] = render_bench_pack_draft(
+            root,
+            Path(str(bench_pack["saved_to"])),
+            template="first-run",
+        )
+    return payload
 
 
 def build_bench_pack(
