@@ -14,7 +14,7 @@ from industrial_embedded_dev_agent.bench_pack_render import (
 )
 from industrial_embedded_dev_agent.models import BenchmarkItem
 from industrial_embedded_dev_agent.runner import run_local_checks_with_options
-from industrial_embedded_dev_agent.tools import kickoff_real_bench, prepare_real_bench_package
+from industrial_embedded_dev_agent.tools import finish_real_bench, kickoff_real_bench, prepare_real_bench_package
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -461,3 +461,48 @@ def test_kickoff_real_bench_can_render_both_drafts(tmp_path: Path) -> None:
     assert summary_payload["first_run_path"].endswith("first_run.md")
     assert summary_payload["session_review_path"].endswith("session_review.md")
     assert "## Archived Outputs" in summary_markdown
+
+
+def test_finish_real_bench_collects_closing_outputs(tmp_path: Path) -> None:
+    session_id = "bench-am-06"
+    session_dir = REPO_ROOT / "reports" / "bench_packs" / "sessions" / session_id
+    if session_dir.exists():
+        shutil.rmtree(session_dir)
+
+    prep = prepare_real_bench_package(
+        REPO_ROOT,
+        session_id=session_id,
+        label="Morning bench finish",
+        output_dir=tmp_path / "prep_bundle",
+    )
+
+    kickoff_real_bench(
+        REPO_ROOT,
+        Path(prep["plan_seed_path"]),
+        execute=False,
+        render_first_run=True,
+        render_session_review=True,
+    )
+
+    result = finish_real_bench(
+        REPO_ROOT,
+        session_id=session_id,
+        prep_dir=Path(prep["output_dir"]),
+    )
+
+    output_dir = Path(result["output_dir"])
+    summary_json = output_dir / "final_summary.json"
+    summary_md = output_dir / "final_summary.md"
+    summary_payload = json.loads(summary_json.read_text(encoding="utf-8"))
+    summary_text = summary_md.read_text(encoding="utf-8")
+
+    assert output_dir.exists()
+    assert (output_dir / "session_bundle.md").exists()
+    assert (output_dir / "kickoff_run_summary.json").exists()
+    assert (output_dir / "kickoff_run_summary.md").exists()
+    assert summary_json.exists()
+    assert summary_md.exists()
+    assert summary_payload["session_id"] == session_id
+    assert summary_payload["pack_count"] >= 1
+    assert summary_payload["kickoff_outputs_present"] is True
+    assert "## Aggregated Outputs" in summary_text

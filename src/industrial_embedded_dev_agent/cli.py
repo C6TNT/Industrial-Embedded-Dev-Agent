@@ -26,6 +26,7 @@ from .taxonomy import parse_taxonomy_labels, summarize_taxonomy
 from .tools import (
     build_bench_pack,
     disable_wsl_stub_environment,
+    finish_real_bench,
     get_execution_mode,
     inspect_wsl_environment,
     kickoff_real_bench,
@@ -115,6 +116,9 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_prep_real_parser.add_argument("--session-id", help="Stable identifier for the upcoming real bench session")
     tools_prep_real_parser.add_argument("--label", help="Optional human-friendly label for the prep pack")
     tools_prep_real_parser.add_argument("--output-dir", help="Optional output directory for the generated prep pack")
+    tools_finish_real_parser = tools_subparsers.add_parser("finish-real-bench", help="Collect session-level outputs and write a closing summary back into the prep bundle")
+    tools_finish_real_parser.add_argument("--session-id", required=True, help="Session identifier used by prep-real-bench and kickoff-real-bench")
+    tools_finish_real_parser.add_argument("--prep-dir", help="Optional prep bundle directory if it is not under reports/real_bench_prep/<session_id>")
     tools_kickoff_real_parser = tools_subparsers.add_parser("kickoff-real-bench", help="Read a real-bench plan seed and create the first read-only bench-pack")
     tools_kickoff_real_parser.add_argument("seed", help="Path to a generated plan_seed.json")
     tools_kickoff_real_parser.add_argument("--execute", action="store_true", help="Actually execute the seeded read-only request")
@@ -301,6 +305,15 @@ def main() -> None:
                     session_id=args.session_id,
                     label=args.label,
                     output_dir=Path(args.output_dir) if args.output_dir else None,
+                )
+            )
+            return
+        if args.tools_command == "finish-real-bench":
+            _print_json(
+                finish_real_bench(
+                    paths.root,
+                    session_id=args.session_id,
+                    prep_dir=Path(args.prep_dir) if args.prep_dir else None,
                 )
             )
             return

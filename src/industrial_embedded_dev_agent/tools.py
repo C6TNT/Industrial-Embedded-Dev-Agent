@@ -311,6 +311,79 @@ def kickoff_real_bench(
     return payload
 
 
+def finish_real_bench(
+    root: Path,
+    *,
+    session_id: str,
+    prep_dir: Path | None = None,
+) -> dict[str, object]:
+    resolved_prep_dir = prep_dir or (root / "reports" / "real_bench_prep" / session_id)
+    finish_dir = resolved_prep_dir / "finish_outputs"
+    finish_dir.mkdir(parents=True, exist_ok=True)
+
+    artifacts: list[str] = []
+    session_bundle_path: Path | None = None
+    compare_path: Path | None = None
+
+    session_dir = root / "reports" / "bench_packs" / "sessions" / session_id
+    pack_paths = sorted(session_dir.glob("*.json")) if session_dir.exists() else []
+    if pack_paths:
+        from .bench_pack_render import render_session_bundle_markdown, compare_latest_bench_packs_in_session
+
+        session_bundle = render_session_bundle_markdown(root, session_id, output_path=finish_dir / "session_bundle.md")
+        session_bundle_path = Path(str(session_bundle["output_path"]))
+        artifacts.append(str(session_bundle_path))
+
+        if len(pack_paths) >= 2:
+            compare_summary = compare_latest_bench_packs_in_session(
+                root,
+                session_id,
+                output_path=finish_dir / "latest_compare.md",
+            )
+            compare_path = Path(str(compare_summary["output_path"]))
+            artifacts.append(str(compare_path))
+
+    kickoff_dir = resolved_prep_dir / "kickoff_outputs"
+    kickoff_summary_json = kickoff_dir / "run_summary.json"
+    kickoff_summary_md = kickoff_dir / "run_summary.md"
+    kickoff_summary_payload: dict[str, object] = {}
+    if kickoff_summary_json.exists():
+        kickoff_summary_payload = json.loads(kickoff_summary_json.read_text(encoding="utf-8"))
+        copied_json = finish_dir / "kickoff_run_summary.json"
+        shutil.copyfile(kickoff_summary_json, copied_json)
+        artifacts.append(str(copied_json))
+    if kickoff_summary_md.exists():
+        copied_md = finish_dir / "kickoff_run_summary.md"
+        shutil.copyfile(kickoff_summary_md, copied_md)
+        artifacts.append(str(copied_md))
+
+    summary_payload = {
+        "session_id": session_id,
+        "prep_dir": str(resolved_prep_dir),
+        "pack_count": len(pack_paths),
+        "kickoff_outputs_present": kickoff_dir.exists(),
+        "session_bundle_path": str(session_bundle_path) if session_bundle_path else "",
+        "latest_compare_path": str(compare_path) if compare_path else "",
+        "kickoff_summary": kickoff_summary_payload,
+    }
+    summary_json_path = finish_dir / "final_summary.json"
+    summary_json_path.write_text(json.dumps(summary_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    artifacts.append(str(summary_json_path))
+
+    summary_md_path = finish_dir / "final_summary.md"
+    summary_md_path.write_text(_render_finish_summary_markdown(summary_payload), encoding="utf-8")
+    artifacts.append(str(summary_md_path))
+
+    return {
+        "session_id": session_id,
+        "prep_dir": str(resolved_prep_dir),
+        "output_dir": str(finish_dir),
+        "files": artifacts,
+        "final_summary_json": str(summary_json_path),
+        "final_summary_markdown": str(summary_md_path),
+    }
+
+
 def build_bench_pack(
     root: Path,
     request: str,
@@ -938,6 +1011,36 @@ def _render_kickoff_summary_markdown(summary: dict[str, object]) -> str:
         f"- bench_pack.json: {summary.get('bench_pack_path', '')}",
         f"- first_run.md: {summary.get('first_run_path', '')}",
         f"- session_review.md: {summary.get('session_review_path', '')}",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _render_finish_summary_markdown(summary: dict[str, object]) -> str:
+    kickoff_summary = summary.get("kickoff_summary", {})
+    plan = kickoff_summary.get("plan", {})
+    parsed = kickoff_summary.get("parsed_output", {})
+    lines = [
+        "# Real Bench Finish Summary",
+        "",
+        f"- Session ID: {summary.get('session_id', '')}",
+        f"- Prep dir: {summary.get('prep_dir', '')}",
+        f"- Pack count: {summary.get('pack_count', 0)}",
+        f"- kickoff_outputs_present: {summary.get('kickoff_outputs_present', False)}",
+        "",
+        "## Aggregated Outputs",
+        "",
+        f"- session_bundle.md: {summary.get('session_bundle_path', '')}",
+        f"- latest_compare.md: {summary.get('latest_compare_path', '')}",
+        f"- final_summary.json: {summary.get('final_summary_json', '')}",
+        "",
+        "## Latest Kickoff Snapshot",
+        "",
+        f"- tool_id: {plan.get('tool_id', '')}",
+        f"- risk_level: {plan.get('risk_level', '')}",
+        f"- parsed status: {parsed.get('status', '')}",
+        f"- transport_state: {parsed.get('transport_state', '')}",
+        f"- next_action: {parsed.get('next_action', '')}",
         "",
     ]
     return "\n".join(lines)
