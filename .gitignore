@@ -69,6 +69,7 @@ output.map
 .ieda_wsl_stub_enabled
 .ieda_stub_profile.json
 reports/bench_packs/
+reports/real_bench_prep/
 
 # Nested repositories accidentally copied into the workspace
 **/.git/

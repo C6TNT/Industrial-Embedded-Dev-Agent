@@ -13,6 +13,7 @@ from industrial_embedded_dev_agent.bench_pack_render import (
 )
 from industrial_embedded_dev_agent.models import BenchmarkItem
 from industrial_embedded_dev_agent.runner import run_local_checks_with_options
+from industrial_embedded_dev_agent.tools import prepare_real_bench_package
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -286,3 +287,26 @@ def test_run_local_checks_with_offline_samples(monkeypatch, tmp_path: Path) -> N
         "benchmark_tool_safety",
         "offline_stub_samples",
     ]
+
+
+def test_prepare_real_bench_package_generates_bundle(tmp_path: Path) -> None:
+    result = prepare_real_bench_package(
+        REPO_ROOT,
+        session_id="bench-am-01",
+        label="Morning bench",
+        output_dir=tmp_path / "prep_bundle",
+    )
+
+    output_dir = Path(result["output_dir"])
+    assert result["session_id"] == "bench-am-01"
+    assert output_dir.exists()
+    assert len(result["files"]) == 5
+
+    index_text = (output_dir / "00_index.md").read_text(encoding="utf-8")
+    readiness_text = (output_dir / "01_readiness_checklist.md").read_text(encoding="utf-8")
+    review_text = (output_dir / "04_session_review.md").read_text(encoding="utf-8")
+
+    assert "Session ID: bench-am-01" in index_text
+    assert "tools use-real" in index_text
+    assert "Source template: real_bench_readiness_checklist.md" in readiness_text
+    assert "Session label: Morning bench" in review_text

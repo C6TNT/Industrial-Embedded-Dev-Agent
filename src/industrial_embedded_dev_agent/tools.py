@@ -155,6 +155,64 @@ def disable_wsl_stub_environment(root: Path) -> dict[str, object]:
     return {"status": "ok", "message": message, "environment": inspect_wsl_environment(root)}
 
 
+def prepare_real_bench_package(
+    root: Path,
+    *,
+    session_id: str | None = None,
+    label: str | None = None,
+    output_dir: Path | None = None,
+) -> dict[str, object]:
+    timestamp = datetime.now().astimezone()
+    resolved_session_id = _resolve_session_id(session_id, label, timestamp) or f"real-bench-{timestamp.strftime('%Y%m%d')}"
+    destination = output_dir or (root / "reports" / "real_bench_prep" / resolved_session_id)
+    destination.mkdir(parents=True, exist_ok=True)
+
+    templates = {
+        "00_index.md": _render_real_bench_index(resolved_session_id, label, timestamp),
+        "01_readiness_checklist.md": _wrap_real_bench_doc(
+            title="Real Bench Readiness Checklist",
+            session_id=resolved_session_id,
+            label=label,
+            timestamp=timestamp,
+            source_path=root / "docs" / "real_bench_readiness_checklist.md",
+        ),
+        "02_first_run_record.md": _wrap_real_bench_doc(
+            title="Real Bench First-Run Record",
+            session_id=resolved_session_id,
+            label=label,
+            timestamp=timestamp,
+            source_path=root / "docs" / "real_bench_first_run_template.md",
+        ),
+        "03_issue_capture.md": _wrap_real_bench_doc(
+            title="Real Bench Issue Capture",
+            session_id=resolved_session_id,
+            label=label,
+            timestamp=timestamp,
+            source_path=root / "docs" / "real_bench_issue_capture_template.md",
+        ),
+        "04_session_review.md": _wrap_real_bench_doc(
+            title="Real Bench Session Review",
+            session_id=resolved_session_id,
+            label=label,
+            timestamp=timestamp,
+            source_path=root / "docs" / "real_bench_session_review_template.md",
+        ),
+    }
+
+    written_files = []
+    for file_name, content in templates.items():
+        file_path = destination / file_name
+        file_path.write_text(content, encoding="utf-8")
+        written_files.append(str(file_path))
+
+    return {
+        "session_id": resolved_session_id,
+        "label": label,
+        "output_dir": str(destination),
+        "files": written_files,
+    }
+
+
 def build_bench_pack(
     root: Path,
     request: str,
@@ -611,6 +669,67 @@ def _resolve_session_id(session_id: str | None, label: str | None, timestamp: da
         if normalized:
             return f"{normalized}_{timestamp.strftime('%Y%m%d')}"
     return None
+
+
+def _render_real_bench_index(session_id: str, label: str | None, timestamp: datetime) -> str:
+    lines = [
+        "# Real Bench Prep Pack",
+        "",
+        f"- Session ID: {session_id}",
+        f"- Session label: {label or ''}",
+        f"- Generated at: {timestamp.isoformat()}",
+        "",
+        "## Recommended Order",
+        "",
+        "1. Read `01_readiness_checklist.md` before touching the bench.",
+        "2. Fill `02_first_run_record.md` during the first read-only run.",
+        "3. If something goes wrong, switch to `03_issue_capture.md` immediately.",
+        "4. End the session with `04_session_review.md`.",
+        "",
+        "## Suggested First Commands",
+        "",
+        "```powershell",
+        "python -m industrial_embedded_dev_agent tools use-real",
+        "python -m industrial_embedded_dev_agent tools doctor",
+        "python -m industrial_embedded_dev_agent tools plan \"先读一下 axis0/axis1 的状态字、错误码和编码器，我要看当前链路是不是还活着。\"",
+        "python -m industrial_embedded_dev_agent tools run \"先读一下 axis0/axis1 的状态字、错误码和编码器，我要看当前链路是不是还活着。\" --execute",
+        "```",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _wrap_real_bench_doc(
+    *,
+    title: str,
+    session_id: str,
+    label: str | None,
+    timestamp: datetime,
+    source_path: Path,
+) -> str:
+    body = source_path.read_text(encoding="utf-8").strip()
+    lines = [
+        f"# {title}",
+        "",
+        f"- Session ID: {session_id}",
+        f"- Session label: {label or ''}",
+        f"- Generated at: {timestamp.isoformat()}",
+        f"- Source template: {source_path.name}",
+        "",
+        "## Session Notes",
+        "",
+        "- Bench location:",
+        "- Board / platform:",
+        "- Servo drive:",
+        "- Motor:",
+        "- Current branch / commit:",
+        "",
+        "---",
+        "",
+        body,
+        "",
+    ]
+    return "\n".join(lines)
 
 
 def _slugify_token(value: str) -> str:

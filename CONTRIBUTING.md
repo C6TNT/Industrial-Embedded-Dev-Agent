@@ -108,6 +108,14 @@ ieda check --include-offline --include-rag --rag-type tool_safety
 
 ## 数据与资料贡献要求
 
+如果你是在真实工位做首轮 bench 验证，建议优先使用：
+
+```bash
+ieda tools prep-real-bench --session-id <session-id> --label "<session label>"
+```
+
+先生成一套 bench checklist / first-run / issue / review 资料包，再开始采证，这样后续沉淀为 case、benchmark 或 issue 会更顺。
+
 ### 日志样本
 
 建议尽量满足：

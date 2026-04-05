@@ -123,6 +123,24 @@
 
 这样仓库会越用越像工业项目，而不是越做越像演示项目。
 
+### 5. 真机回工位前可先生成 bench 准备包
+
+如果你准备从离线 stub 回到真实工位，可以先生成一套 ready-to-fill 的真机资料包：
+
+```bash
+ieda tools prep-real-bench --session-id bench-am-01 --label "Morning bench"
+```
+
+它会在 `reports/real_bench_prep/<session_id>/` 下生成：
+
+- `00_index.md`
+- `01_readiness_checklist.md`
+- `02_first_run_record.md`
+- `03_issue_capture.md`
+- `04_session_review.md`
+
+这样回到工位后可以直接按顺序填，不用再手工整理模板。
+
 ## 本地验证与 CI
 
 当前仓库已经接入了一套最小可用的本地回归与 GitHub Actions CI。

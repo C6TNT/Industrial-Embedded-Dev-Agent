@@ -31,6 +31,7 @@ from .tools import (
     list_stub_scenarios,
     list_tools,
     plan_tool_request,
+    prepare_real_bench_package,
     run_tool_request,
     setup_wsl_stub_environment,
 )
@@ -109,6 +110,10 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_subparsers.add_parser("stub-scenarios", help="List the available no-hardware stub scenarios")
     tools_subparsers.add_parser("mode", help="Show the current WSL execution mode")
     tools_subparsers.add_parser("doctor", help="Inspect the local WSL execution environment")
+    tools_prep_real_parser = tools_subparsers.add_parser("prep-real-bench", help="Generate a ready-to-fill real-bench prep pack with checklist and templates")
+    tools_prep_real_parser.add_argument("--session-id", help="Stable identifier for the upcoming real bench session")
+    tools_prep_real_parser.add_argument("--label", help="Optional human-friendly label for the prep pack")
+    tools_prep_real_parser.add_argument("--output-dir", help="Optional output directory for the generated prep pack")
     tools_setup_stub_parser = tools_subparsers.add_parser("setup-stub", help="Enable the no-hardware WSL stub mode for local testing")
     tools_setup_stub_parser.add_argument("--scenario", default="nominal", help="Stub scenario name, for example nominal or axis1_fault")
     tools_subparsers.add_parser("use-real", help="Disable stub mode and switch back to real-hardware execution")
@@ -280,6 +285,16 @@ def main() -> None:
             return
         if args.tools_command == "doctor":
             _print_json(inspect_wsl_environment(paths.root))
+            return
+        if args.tools_command == "prep-real-bench":
+            _print_json(
+                prepare_real_bench_package(
+                    paths.root,
+                    session_id=args.session_id,
+                    label=args.label,
+                    output_dir=Path(args.output_dir) if args.output_dir else None,
+                )
+            )
             return
         if args.tools_command == "setup-stub":
             _print_json(setup_wsl_stub_environment(paths.root, scenario=args.scenario))
