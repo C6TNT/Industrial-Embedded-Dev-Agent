@@ -83,6 +83,18 @@ ieda check
 ieda check --include-rag --rag-type tool_safety
 ```
 
+如果你的改动涉及 bench-pack、compare-pack、session review 或离线 stub 样例，建议再额外跑：
+
+```bash
+ieda check --include-offline
+```
+
+如果你这次改动同时影响检索和离线 bench 链，建议直接跑：
+
+```bash
+ieda check --include-offline --include-rag --rag-type tool_safety
+```
+
 如果后续仓库扩展出更重的 RAG 回归集，可以按改动范围选择对应的 `--rag-type`。
 
 仓库远端 CI 当前也分成两层：

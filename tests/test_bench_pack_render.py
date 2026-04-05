@@ -8,6 +8,7 @@ from industrial_embedded_dev_agent.bench_pack_render import (
     compare_latest_bench_packs_in_session,
     render_bench_pack_markdown,
     render_session_bundle_markdown,
+    summarize_bench_pack_diff_from_files,
     summarize_bench_sessions,
 )
 from industrial_embedded_dev_agent.models import BenchmarkItem
@@ -57,6 +58,19 @@ def test_compare_pack_detects_open_rpmsg_transport_drop(tmp_path: Path) -> None:
     assert summary["left_transport_state"] == "readable"
     assert summary["right_transport_state"] == "unverified"
     assert any("Transport state changed" in item for item in summary["observations"])
+
+
+def test_summarize_bench_pack_diff_from_files_matches_compare_summary() -> None:
+    summary = summarize_bench_pack_diff_from_files(
+        SAMPLES_ROOT / "sample_nominal.json",
+        SAMPLES_ROOT / "sample_axis1_fault.json",
+    )
+
+    changed_axes = {item["axis_id"]: item for item in summary["axis_diffs"] if item["changed"]}
+    assert summary["same_session"] is True
+    assert summary["transport_changed"] is False
+    assert list(changed_axes) == ["1"]
+    assert changed_axes["1"]["fields"]["encoder"] == {"left": 2008, "right": 8}
 
 
 def test_compare_latest_bench_packs_in_session_uses_last_two_sorted_files(tmp_path: Path) -> None:
@@ -225,4 +239,50 @@ def test_run_local_checks_with_rag_filter(monkeypatch, tmp_path: Path) -> None:
         ("rules", 2),
         ("tools", 1),
         ("rag", 1),
+    ]
+
+
+def test_run_local_checks_with_offline_samples(monkeypatch, tmp_path: Path) -> None:
+    items = [
+        BenchmarkItem(
+            item_id="safety-004",
+            item_type="tool_safety",
+            difficulty="easy",
+            tags=[],
+            input_payload={},
+            expected_payload={},
+        ),
+    ]
+
+    monkeypatch.setattr("industrial_embedded_dev_agent.runner.load_benchmark_items", lambda path: items)
+    monkeypatch.setattr(
+        "industrial_embedded_dev_agent.runner._run_pytest_check",
+        lambda root: {"name": "pytest", "passed": True, "details": {}},
+    )
+    monkeypatch.setattr(
+        "industrial_embedded_dev_agent.runner._run_offline_stub_regression_check",
+        lambda root: {"name": "offline_stub_samples", "passed": True, "details": {"pair_count": 3}},
+    )
+
+    def fake_run_benchmark(run_items, *, root, engine):
+        return {
+            "engine": engine,
+            "total": len(run_items),
+            "passed": len(run_items),
+            "failed": 0,
+            "pass_rate": 1.0,
+            "citation_passed": len(run_items),
+            "citation_pass_rate": 1.0,
+        }
+
+    monkeypatch.setattr("industrial_embedded_dev_agent.runner.run_benchmark", fake_run_benchmark)
+
+    result = run_local_checks_with_options(tmp_path, include_offline=True)
+
+    assert result["passed"] is True
+    assert [check["name"] for check in result["checks"]] == [
+        "pytest",
+        "benchmark_rules",
+        "benchmark_tool_safety",
+        "offline_stub_samples",
     ]

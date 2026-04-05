@@ -16,6 +16,12 @@ def compare_latest_bench_packs_in_session(
     return summary
 
 
+def summarize_bench_pack_diff_from_files(left_path: Path, right_path: Path) -> dict[str, object]:
+    left_pack = _normalize_render_payload(json.loads(left_path.read_text(encoding="utf-8")))
+    right_pack = _normalize_render_payload(json.loads(right_path.read_text(encoding="utf-8")))
+    return _build_pack_diff_summary(left_pack, right_pack)
+
+
 def compare_bench_packs(
     root: Path,
     left_path: Path,

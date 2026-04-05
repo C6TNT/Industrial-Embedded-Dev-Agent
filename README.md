@@ -147,6 +147,18 @@ ieda check
 ieda check --include-rag --rag-type tool_safety
 ```
 
+如果你想把固定的离线 stub 样例对比也一起纳入回归，可以再跑：
+
+```bash
+ieda check --include-offline
+```
+
+如果想做当前最完整的一组本地检查，可以直接跑：
+
+```bash
+ieda check --include-offline --include-rag --rag-type tool_safety
+```
+
 当前支持的 `--rag-type` 有：
 
 - `knowledge_qa`
@@ -164,9 +176,9 @@ ieda check --include-rag --rag-type tool_safety
 - `Full Check`
   在 `main` 分支推送和手动触发时执行，运行：
   `python -m industrial_embedded_dev_agent check`
-  `python -m industrial_embedded_dev_agent check --include-rag --rag-type tool_safety`
+  `python -m industrial_embedded_dev_agent check --include-offline --include-rag --rag-type tool_safety`
 
-也就是说，日常提交先走轻量兜底，较重的重点 RAG 回归则放在单独的完整检查里。
+也就是说，日常提交先走轻量兜底，离线样例回归和重点 RAG 回归则放在单独的完整检查里。
 
 ## 路线图
 

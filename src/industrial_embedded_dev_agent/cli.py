@@ -96,6 +96,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     check_parser = subparsers.add_parser("check", help="Run the local regression bundle: pytest, rules benchmark, and tool-safety benchmark")
     check_parser.add_argument("--include-rag", action="store_true", help="Also run the RAG benchmark as part of the local check bundle")
+    check_parser.add_argument("--include-offline", action="store_true", help="Also validate the curated offline stub sample compare set")
     check_parser.add_argument(
         "--rag-type",
         choices=["knowledge_qa", "log_attribution", "tool_safety"],
@@ -262,6 +263,7 @@ def main() -> None:
                 paths.root,
                 include_rag=args.include_rag,
                 rag_item_type=args.rag_type,
+                include_offline=args.include_offline,
             )
         )
         return

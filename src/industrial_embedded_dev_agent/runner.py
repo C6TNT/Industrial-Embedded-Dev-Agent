@@ -1,11 +1,11 @@
 from __future__ import annotations
-
 import subprocess
 import sys
 from dataclasses import asdict
 from pathlib import Path
 
 from .analysis import analyze_text
+from .bench_pack_render import summarize_bench_pack_diff_from_files
 from .benchmarks import load_benchmark_items
 from .models import BenchmarkItem
 from .rag import answer_with_rag
@@ -55,6 +55,7 @@ def run_local_checks_with_options(
     *,
     include_rag: bool = False,
     rag_item_type: str | None = None,
+    include_offline: bool = False,
 ) -> dict[str, object]:
     benchmark_path = root / "data" / "benchmark" / "benchmark_v1.jsonl"
     items = load_benchmark_items(benchmark_path)
@@ -110,6 +111,9 @@ def run_local_checks_with_options(
             }
         )
 
+    if include_offline:
+        checks.append(_run_offline_stub_regression_check(root))
+
     return {
         "passed": all(check["passed"] for check in checks),
         "checks": checks,
@@ -127,6 +131,60 @@ def _run_pytest_check(root: Path) -> dict[str, object]:
             "returncode": completed.returncode,
             "stdout": completed.stdout[-4000:],
             "stderr": completed.stderr[-4000:],
+        },
+    }
+
+
+def _run_offline_stub_regression_check(root: Path) -> dict[str, object]:
+    samples_root = root / "data" / "examples" / "stub_bench_packs"
+    pairs = [
+        {
+            "name": "nominal_vs_axis1_fault",
+            "left": samples_root / "sample_nominal.json",
+            "right": samples_root / "sample_axis1_fault.json",
+            "expected_changed_axes": ["1"],
+            "expected_transport_changed": False,
+        },
+        {
+            "name": "nominal_vs_encoder_stall",
+            "left": samples_root / "sample_nominal.json",
+            "right": samples_root / "sample_encoder_stall.json",
+            "expected_changed_axes": ["0", "1"],
+            "expected_transport_changed": False,
+        },
+        {
+            "name": "nominal_vs_open_rpmsg_fail",
+            "left": samples_root / "sample_nominal.json",
+            "right": samples_root / "sample_open_rpmsg_fail.json",
+            "expected_changed_axes": ["0", "1"],
+            "expected_transport_changed": True,
+        },
+    ]
+
+    pair_results: list[dict[str, object]] = []
+    for pair in pairs:
+        summary = summarize_bench_pack_diff_from_files(pair["left"], pair["right"])
+        changed_axes = sorted(item["axis_id"] for item in summary["axis_diffs"] if item["changed"])
+        pair_results.append(
+            {
+                "name": pair["name"],
+                "passed": (
+                    changed_axes == pair["expected_changed_axes"]
+                    and summary["transport_changed"] == pair["expected_transport_changed"]
+                ),
+                "changed_axes": changed_axes,
+                "transport_changed": summary["transport_changed"],
+                "expected_changed_axes": pair["expected_changed_axes"],
+                "expected_transport_changed": pair["expected_transport_changed"],
+            }
+        )
+
+    return {
+        "name": "offline_stub_samples",
+        "passed": all(item["passed"] for item in pair_results),
+        "details": {
+            "pair_count": len(pair_results),
+            "pairs": pair_results,
         },
     }
 
