@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .analysis import analyze_text
 from .bench_pack_render import (
+    compare_bench_packs,
     render_bench_pack_markdown,
     render_session_bundle_markdown,
     render_sessions_index_markdown,
@@ -120,6 +121,11 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_sessions_parser = tools_subparsers.add_parser("sessions", help="Summarize captured bench sessions")
     tools_sessions_parser.add_argument("--render-index", action="store_true", help="Also render a Markdown index page under reports/bench_packs/rendered")
     tools_sessions_parser.add_argument("--output", help="Optional Markdown output path when used with --render-index")
+
+    tools_compare_parser = tools_subparsers.add_parser("compare-pack", help="Compare two bench-pack JSON files and summarize read-only snapshot differences")
+    tools_compare_parser.add_argument("left", help="Path to the earlier or baseline bench-pack JSON")
+    tools_compare_parser.add_argument("right", help="Path to the later bench-pack JSON")
+    tools_compare_parser.add_argument("--output", help="Optional Markdown output path")
 
     tools_plan_parser = tools_subparsers.add_parser("plan", help="Plan a tool call without executing it")
     tools_plan_parser.add_argument("request", help="Natural-language tool request")
@@ -296,6 +302,16 @@ def main() -> None:
                 )
                 return
             _print_json(summarize_bench_sessions(paths.root))
+            return
+        if args.tools_command == "compare-pack":
+            _print_json(
+                compare_bench_packs(
+                    paths.root,
+                    Path(args.left),
+                    Path(args.right),
+                    output_path=Path(args.output) if args.output else None,
+                )
+            )
             return
         if args.tools_command == "plan":
             _print_json(asdict(plan_tool_request(paths.root, args.request, tool_id=args.tool_id)))

@@ -4,6 +4,24 @@ import json
 from pathlib import Path
 
 
+def compare_bench_packs(
+    root: Path,
+    left_path: Path,
+    right_path: Path,
+    *,
+    output_path: Path | None = None,
+) -> dict[str, object]:
+    left_pack = _normalize_render_payload(json.loads(left_path.read_text(encoding="utf-8")))
+    right_pack = _normalize_render_payload(json.loads(right_path.read_text(encoding="utf-8")))
+    summary = _build_pack_diff_summary(left_pack, right_pack)
+    rendered = _render_pack_diff_template(summary)
+    destination = output_path or _default_compare_pack_path(root, left_path, right_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(rendered, encoding="utf-8")
+    summary["output_path"] = str(destination)
+    return summary
+
+
 def summarize_bench_sessions(root: Path) -> dict[str, object]:
     sessions_root = root / "reports" / "bench_packs" / "sessions"
     entries = []
@@ -99,6 +117,10 @@ def _default_session_bundle_path(root: Path, session_id: str) -> Path:
 
 def _default_sessions_index_path(root: Path) -> Path:
     return root / "reports" / "bench_packs" / "rendered" / "sessions_index.md"
+
+
+def _default_compare_pack_path(root: Path, left_path: Path, right_path: Path) -> Path:
+    return root / "reports" / "bench_packs" / "rendered" / f"{left_path.stem}_vs_{right_path.stem}.md"
 
 
 def _render_pack_template(pack: dict[str, object], *, template: str) -> str:
@@ -225,6 +247,170 @@ def _render_sessions_index_template(summary: dict[str, object]) -> str:
                 "",
             ]
         )
+    return "\n".join(lines)
+
+
+def _build_pack_diff_summary(left_pack: dict[str, object], right_pack: dict[str, object]) -> dict[str, object]:
+    left_plan = left_pack.get("result", {}).get("plan", {})
+    right_plan = right_pack.get("result", {}).get("plan", {})
+    left_execution = left_pack.get("result", {}).get("execution", {})
+    right_execution = right_pack.get("result", {}).get("execution", {})
+    left_parsed = left_execution.get("parsed_output", {})
+    right_parsed = right_execution.get("parsed_output", {})
+
+    return {
+        "left_capture": left_pack.get("captured_at", ""),
+        "right_capture": right_pack.get("captured_at", ""),
+        "left_request": left_pack.get("request", ""),
+        "right_request": right_pack.get("request", ""),
+        "left_session_id": left_pack.get("session_id", ""),
+        "right_session_id": right_pack.get("session_id", ""),
+        "same_session": left_pack.get("session_id", "") == right_pack.get("session_id", ""),
+        "left_tool_id": left_plan.get("tool_id", ""),
+        "right_tool_id": right_plan.get("tool_id", ""),
+        "tool_changed": left_plan.get("tool_id", "") != right_plan.get("tool_id", ""),
+        "left_risk_level": left_plan.get("risk_level", ""),
+        "right_risk_level": right_plan.get("risk_level", ""),
+        "risk_changed": left_plan.get("risk_level", "") != right_plan.get("risk_level", ""),
+        "left_mode": left_pack.get("mode", {}).get("mode", ""),
+        "right_mode": right_pack.get("mode", {}).get("mode", ""),
+        "mode_changed": left_pack.get("mode", {}).get("mode", "") != right_pack.get("mode", {}).get("mode", ""),
+        "left_returncode": left_execution.get("returncode"),
+        "right_returncode": right_execution.get("returncode"),
+        "returncode_changed": left_execution.get("returncode") != right_execution.get("returncode"),
+        "left_status": left_parsed.get("status", ""),
+        "right_status": right_parsed.get("status", ""),
+        "status_changed": left_parsed.get("status", "") != right_parsed.get("status", ""),
+        "transport_changed": left_parsed.get("transport_state", "") != right_parsed.get("transport_state", ""),
+        "left_transport_state": left_parsed.get("transport_state", ""),
+        "right_transport_state": right_parsed.get("transport_state", ""),
+        "axis_diffs": _compare_axis_snapshots(left_parsed.get("axes", {}), right_parsed.get("axes", {})),
+        "observations": _build_pack_diff_observations(left_pack, right_pack),
+    }
+
+
+def _compare_axis_snapshots(left_axes: dict[str, object], right_axes: dict[str, object]) -> list[dict[str, object]]:
+    diffs: list[dict[str, object]] = []
+    for axis_id in sorted(set(left_axes.keys()) | set(right_axes.keys())):
+        left_axis = left_axes.get(axis_id, {})
+        right_axis = right_axes.get(axis_id, {})
+        fields: dict[str, dict[str, object]] = {}
+        for field_name in ("error_code", "status_code", "axis_status", "encoder"):
+            left_value = left_axis.get(field_name)
+            right_value = right_axis.get(field_name)
+            if left_value != right_value:
+                fields[field_name] = {"left": left_value, "right": right_value}
+        diffs.append(
+            {
+                "axis_id": axis_id,
+                "changed": bool(fields),
+                "fields": fields,
+            }
+        )
+    return diffs
+
+
+def _build_pack_diff_observations(left_pack: dict[str, object], right_pack: dict[str, object]) -> list[str]:
+    summary = _build_pack_diff_summary_core(left_pack, right_pack)
+    observations: list[str] = []
+    if left_pack.get("request", "") != right_pack.get("request", ""):
+        observations.append("The natural-language request text changed between the two packs.")
+    if left_pack.get("session_id", "") != right_pack.get("session_id", ""):
+        observations.append("The two packs do not belong to the same recorded session.")
+    if summary["mode_changed"]:
+        observations.append(f"Execution mode changed from {summary['left_mode']} to {summary['right_mode']}.")
+    if summary["tool_changed"]:
+        observations.append(f"Selected tool changed from {summary['left_tool_id']} to {summary['right_tool_id']}.")
+    if summary["risk_changed"]:
+        observations.append(f"Risk level changed from {summary['left_risk_level']} to {summary['right_risk_level']}.")
+    if summary["status_changed"]:
+        observations.append(f"Parsed status changed from {summary['left_status']} to {summary['right_status']}.")
+    if summary["transport_changed"]:
+        observations.append(
+            f"Transport state changed from {summary['left_transport_state']} to {summary['right_transport_state']}."
+        )
+    changed_axes = [item["axis_id"] for item in summary["axis_diffs"] if item["changed"]]
+    if changed_axes:
+        observations.append("Axis snapshot differences detected on: " + ", ".join(f"axis{axis_id}" for axis_id in changed_axes) + ".")
+    if not observations:
+        observations.append("No material difference was detected in the captured read-only snapshot metadata.")
+    return observations
+
+
+def _build_pack_diff_summary_core(left_pack: dict[str, object], right_pack: dict[str, object]) -> dict[str, object]:
+    left_plan = left_pack.get("result", {}).get("plan", {})
+    right_plan = right_pack.get("result", {}).get("plan", {})
+    left_execution = left_pack.get("result", {}).get("execution", {})
+    right_execution = right_pack.get("result", {}).get("execution", {})
+    left_parsed = left_execution.get("parsed_output", {})
+    right_parsed = right_execution.get("parsed_output", {})
+    return {
+        "left_tool_id": left_plan.get("tool_id", ""),
+        "right_tool_id": right_plan.get("tool_id", ""),
+        "tool_changed": left_plan.get("tool_id", "") != right_plan.get("tool_id", ""),
+        "left_risk_level": left_plan.get("risk_level", ""),
+        "right_risk_level": right_plan.get("risk_level", ""),
+        "risk_changed": left_plan.get("risk_level", "") != right_plan.get("risk_level", ""),
+        "left_mode": left_pack.get("mode", {}).get("mode", ""),
+        "right_mode": right_pack.get("mode", {}).get("mode", ""),
+        "mode_changed": left_pack.get("mode", {}).get("mode", "") != right_pack.get("mode", {}).get("mode", ""),
+        "left_status": left_parsed.get("status", ""),
+        "right_status": right_parsed.get("status", ""),
+        "status_changed": left_parsed.get("status", "") != right_parsed.get("status", ""),
+        "left_transport_state": left_parsed.get("transport_state", ""),
+        "right_transport_state": right_parsed.get("transport_state", ""),
+        "transport_changed": left_parsed.get("transport_state", "") != right_parsed.get("transport_state", ""),
+        "axis_diffs": _compare_axis_snapshots(left_parsed.get("axes", {}), right_parsed.get("axes", {})),
+    }
+
+
+def _render_pack_diff_template(summary: dict[str, object]) -> str:
+    lines = [
+        "# Bench Pack Comparison",
+        "",
+        f"- Left capture: {summary.get('left_capture', '')}",
+        f"- Right capture: {summary.get('right_capture', '')}",
+        f"- Same session: {summary.get('same_session', False)}",
+        f"- Left session: {summary.get('left_session_id', '')}",
+        f"- Right session: {summary.get('right_session_id', '')}",
+        "",
+        "## Requests",
+        "",
+        f"- Left: {summary.get('left_request', '')}",
+        f"- Right: {summary.get('right_request', '')}",
+        "",
+        "## Runtime Changes",
+        "",
+        f"- Tool changed: {summary.get('tool_changed', False)} ({summary.get('left_tool_id', '')} -> {summary.get('right_tool_id', '')})",
+        f"- Risk changed: {summary.get('risk_changed', False)} ({summary.get('left_risk_level', '')} -> {summary.get('right_risk_level', '')})",
+        f"- Mode changed: {summary.get('mode_changed', False)} ({summary.get('left_mode', '')} -> {summary.get('right_mode', '')})",
+        f"- Returncode changed: {summary.get('returncode_changed', False)} ({summary.get('left_returncode')} -> {summary.get('right_returncode')})",
+        f"- Parsed status changed: {summary.get('status_changed', False)} ({summary.get('left_status', '')} -> {summary.get('right_status', '')})",
+        f"- Transport changed: {summary.get('transport_changed', False)} ({summary.get('left_transport_state', '')} -> {summary.get('right_transport_state', '')})",
+        "",
+        "## Axis Differences",
+        "",
+    ]
+    axis_diffs = summary.get("axis_diffs", [])
+    if axis_diffs:
+        for axis in axis_diffs:
+            lines.append(f"### axis{axis.get('axis_id', '')}")
+            lines.append("")
+            lines.append(f"- changed: {axis.get('changed', False)}")
+            fields = axis.get("fields", {})
+            if fields:
+                for field_name, values in fields.items():
+                    lines.append(f"- {field_name}: {values.get('left')} -> {values.get('right')}")
+            else:
+                lines.append("- no field-level change detected")
+            lines.append("")
+    else:
+        lines.extend(["- No axis snapshots were available in either pack.", ""])
+
+    lines.extend(["## Observations", ""])
+    for item in summary.get("observations", []):
+        lines.append(f"- {item}")
+    lines.append("")
     return "\n".join(lines)
 
 
