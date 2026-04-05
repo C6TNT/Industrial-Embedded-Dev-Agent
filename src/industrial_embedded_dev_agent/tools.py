@@ -166,9 +166,17 @@ def prepare_real_bench_package(
     resolved_session_id = _resolve_session_id(session_id, label, timestamp) or f"real-bench-{timestamp.strftime('%Y%m%d')}"
     destination = output_dir or (root / "reports" / "real_bench_prep" / resolved_session_id)
     destination.mkdir(parents=True, exist_ok=True)
+    doctor = inspect_wsl_environment(root)
+    git_context = _collect_git_context(root)
 
     templates = {
-        "00_index.md": _render_real_bench_index(resolved_session_id, label, timestamp),
+        "00_index.md": _render_real_bench_index(
+            resolved_session_id,
+            label,
+            timestamp,
+            doctor=doctor,
+            git_context=git_context,
+        ),
         "01_readiness_checklist.md": _wrap_real_bench_doc(
             title="Real Bench Readiness Checklist",
             session_id=resolved_session_id,
@@ -209,6 +217,8 @@ def prepare_real_bench_package(
         "session_id": resolved_session_id,
         "label": label,
         "output_dir": str(destination),
+        "doctor": doctor,
+        "git_context": git_context,
         "files": written_files,
     }
 
@@ -671,13 +681,32 @@ def _resolve_session_id(session_id: str | None, label: str | None, timestamp: da
     return None
 
 
-def _render_real_bench_index(session_id: str, label: str | None, timestamp: datetime) -> str:
+def _render_real_bench_index(
+    session_id: str,
+    label: str | None,
+    timestamp: datetime,
+    *,
+    doctor: dict[str, object],
+    git_context: dict[str, str],
+) -> str:
     lines = [
         "# Real Bench Prep Pack",
         "",
         f"- Session ID: {session_id}",
         f"- Session label: {label or ''}",
         f"- Generated at: {timestamp.isoformat()}",
+        f"- Git branch: {git_context.get('branch', '')}",
+        f"- Git commit: {git_context.get('commit', '')}",
+        "",
+        "## Current Runtime Snapshot",
+        "",
+        f"- execution_mode: {doctor.get('execution_mode', '')}",
+        f"- stub_mode_enabled: {doctor.get('stub_mode_enabled', '')}",
+        f"- real_mode_ready: {doctor.get('real_mode_ready', '')}",
+        f"- stub_scenario: {doctor.get('stub_scenario', '')}",
+        f"- wsl_available: {doctor.get('wsl_available', '')}",
+        f"- python3_available: {doctor.get('python3_available', '')}",
+        f"- stub_library_present: {doctor.get('stub_library_present', '')}",
         "",
         "## Recommended Order",
         "",
@@ -697,6 +726,21 @@ def _render_real_bench_index(session_id: str, label: str | None, timestamp: date
         "",
     ]
     return "\n".join(lines)
+
+
+def _collect_git_context(root: Path) -> dict[str, str]:
+    return {
+        "branch": _capture_git_value(root, ["rev-parse", "--abbrev-ref", "HEAD"]),
+        "commit": _capture_git_value(root, ["rev-parse", "--short", "HEAD"]),
+    }
+
+
+def _capture_git_value(root: Path, args: list[str]) -> str:
+    command = ["git", *args]
+    completed = subprocess.run(command, cwd=str(root), capture_output=True, text=True)
+    if completed.returncode != 0:
+        return ""
+    return completed.stdout.strip()
 
 
 def _wrap_real_bench_doc(

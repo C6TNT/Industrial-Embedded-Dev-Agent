@@ -307,6 +307,9 @@ def test_prepare_real_bench_package_generates_bundle(tmp_path: Path) -> None:
     review_text = (output_dir / "04_session_review.md").read_text(encoding="utf-8")
 
     assert "Session ID: bench-am-01" in index_text
+    assert "Git branch:" in index_text
+    assert "Git commit:" in index_text
+    assert "## Current Runtime Snapshot" in index_text
     assert "tools use-real" in index_text
     assert "Source template: real_bench_readiness_checklist.md" in readiness_text
     assert "Session label: Morning bench" in review_text
