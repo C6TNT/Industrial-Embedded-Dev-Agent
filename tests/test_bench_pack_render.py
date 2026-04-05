@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import json
 from pathlib import Path
 
 from industrial_embedded_dev_agent.bench_pack_render import (
@@ -300,16 +301,23 @@ def test_prepare_real_bench_package_generates_bundle(tmp_path: Path) -> None:
     output_dir = Path(result["output_dir"])
     assert result["session_id"] == "bench-am-01"
     assert output_dir.exists()
-    assert len(result["files"]) == 5
+    assert len(result["files"]) == 6
 
+    doctor_snapshot = output_dir / "doctor_snapshot.json"
     index_text = (output_dir / "00_index.md").read_text(encoding="utf-8")
     readiness_text = (output_dir / "01_readiness_checklist.md").read_text(encoding="utf-8")
     review_text = (output_dir / "04_session_review.md").read_text(encoding="utf-8")
+    doctor_payload = json.loads(doctor_snapshot.read_text(encoding="utf-8"))
 
     assert "Session ID: bench-am-01" in index_text
     assert "Git branch:" in index_text
     assert "Git commit:" in index_text
     assert "## Current Runtime Snapshot" in index_text
+    assert "doctor_snapshot.json" in index_text
     assert "tools use-real" in index_text
     assert "Source template: real_bench_readiness_checklist.md" in readiness_text
     assert "Session label: Morning bench" in review_text
+    assert doctor_payload["session_id"] == "bench-am-01"
+    assert doctor_payload["label"] == "Morning bench"
+    assert "doctor" in doctor_payload
+    assert "git_context" in doctor_payload

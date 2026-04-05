@@ -208,6 +208,17 @@ def prepare_real_bench_package(
     }
 
     written_files = []
+    doctor_snapshot_path = destination / "doctor_snapshot.json"
+    doctor_snapshot_payload = {
+        "session_id": resolved_session_id,
+        "label": label,
+        "generated_at": timestamp.isoformat(),
+        "git_context": git_context,
+        "doctor": doctor,
+    }
+    doctor_snapshot_path.write_text(json.dumps(doctor_snapshot_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    written_files.append(str(doctor_snapshot_path))
+
     for file_name, content in templates.items():
         file_path = destination / file_name
         file_path.write_text(content, encoding="utf-8")
@@ -219,6 +230,7 @@ def prepare_real_bench_package(
         "output_dir": str(destination),
         "doctor": doctor,
         "git_context": git_context,
+        "doctor_snapshot_path": str(doctor_snapshot_path),
         "files": written_files,
     }
 
@@ -707,6 +719,7 @@ def _render_real_bench_index(
         f"- wsl_available: {doctor.get('wsl_available', '')}",
         f"- python3_available: {doctor.get('python3_available', '')}",
         f"- stub_library_present: {doctor.get('stub_library_present', '')}",
+        "- Machine-readable snapshot: `doctor_snapshot.json`",
         "",
         "## Recommended Order",
         "",
