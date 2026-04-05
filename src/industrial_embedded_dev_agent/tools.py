@@ -374,6 +374,13 @@ def finish_real_bench(
     summary_md_path.write_text(_render_finish_summary_markdown(summary_payload), encoding="utf-8")
     artifacts.append(str(summary_md_path))
 
+    candidate_exports = _export_finish_candidates(
+        finish_dir,
+        session_id=session_id,
+        summary_payload=summary_payload,
+    )
+    artifacts.extend(candidate_exports["files"])
+
     return {
         "session_id": session_id,
         "prep_dir": str(resolved_prep_dir),
@@ -381,6 +388,7 @@ def finish_real_bench(
         "files": artifacts,
         "final_summary_json": str(summary_json_path),
         "final_summary_markdown": str(summary_md_path),
+        "candidate_exports": candidate_exports,
     }
 
 
@@ -1044,6 +1052,97 @@ def _render_finish_summary_markdown(summary: dict[str, object]) -> str:
         "",
     ]
     return "\n".join(lines)
+
+
+def _export_finish_candidates(
+    finish_dir: Path,
+    *,
+    session_id: str,
+    summary_payload: dict[str, object],
+) -> dict[str, object]:
+    candidate_dir = finish_dir / "candidate_exports"
+    candidate_dir.mkdir(parents=True, exist_ok=True)
+
+    kickoff_summary = summary_payload.get("kickoff_summary", {})
+    plan = kickoff_summary.get("plan", {})
+    parsed = kickoff_summary.get("parsed_output", {})
+    issue_tag = _candidate_issue_tag(parsed, plan)
+
+    case_path = candidate_dir / "case_candidate.md"
+    case_path.write_text(
+        "\n".join(
+            [
+                "# Case Candidate",
+                "",
+                f"- Session ID: {session_id}",
+                f"- Suggested tag: {issue_tag}",
+                f"- Tool ID: {plan.get('tool_id', '')}",
+                f"- Risk level: {plan.get('risk_level', '')}",
+                "",
+                "## Observed Summary",
+                "",
+                f"- {parsed.get('summary', '')}",
+                "",
+                "## Why This Matters",
+                "",
+                "- This candidate was generated from a real-bench finish pack and should be reviewed before entering the formal case library.",
+                "",
+                "## Suggested Next Step",
+                "",
+                f"- {parsed.get('next_action', '')}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    log_candidate = {
+        "session_id": session_id,
+        "suggested_tag": issue_tag,
+        "tool_id": plan.get("tool_id", ""),
+        "risk_level": plan.get("risk_level", ""),
+        "parsed_output": parsed,
+    }
+    log_path = candidate_dir / "log_candidate.json"
+    log_path.write_text(json.dumps(log_candidate, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    benchmark_candidate = {
+        "id": f"candidate-{session_id}",
+        "item_type": "log_attribution",
+        "input": {
+            "question": f"{session_id} finish pack 里暴露的主要问题更像什么？",
+        },
+        "expected": {
+            "must_include": [issue_tag],
+        },
+        "tags": [issue_tag, "finish_pack_candidate"],
+        "difficulty": "medium",
+    }
+    benchmark_path = candidate_dir / "benchmark_candidate.json"
+    benchmark_path.write_text(json.dumps(benchmark_candidate, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    return {
+        "output_dir": str(candidate_dir),
+        "files": [str(case_path), str(log_path), str(benchmark_path)],
+        "case_candidate": str(case_path),
+        "log_candidate": str(log_path),
+        "benchmark_candidate": str(benchmark_path),
+    }
+
+
+def _candidate_issue_tag(parsed: dict[str, object], plan: dict[str, object]) -> str:
+    transport_state = str(parsed.get("transport_state", "")).strip()
+    status = str(parsed.get("status", "")).strip()
+    summary = str(parsed.get("summary", "")).lower()
+    if transport_state == "unverified":
+        return "transport_degraded"
+    if status in {"environment_error", "execution_failed"}:
+        return "environment_blocker"
+    if "error code" in summary or "non-zero" in summary:
+        return "axis_fault_snapshot"
+    if str(plan.get("tool_id", "")) == "SCRIPT-004":
+        return "readonly_snapshot_review"
+    return "finish_pack_review"
 
 
 def _collect_git_context(root: Path) -> dict[str, str]:

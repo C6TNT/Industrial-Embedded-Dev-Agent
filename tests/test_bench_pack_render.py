@@ -495,6 +495,10 @@ def test_finish_real_bench_collects_closing_outputs(tmp_path: Path) -> None:
     summary_md = output_dir / "final_summary.md"
     summary_payload = json.loads(summary_json.read_text(encoding="utf-8"))
     summary_text = summary_md.read_text(encoding="utf-8")
+    candidate_dir = output_dir / "candidate_exports"
+    case_candidate = candidate_dir / "case_candidate.md"
+    log_candidate = candidate_dir / "log_candidate.json"
+    benchmark_candidate = candidate_dir / "benchmark_candidate.json"
 
     assert output_dir.exists()
     assert (output_dir / "session_bundle.md").exists()
@@ -506,3 +510,9 @@ def test_finish_real_bench_collects_closing_outputs(tmp_path: Path) -> None:
     assert summary_payload["pack_count"] >= 1
     assert summary_payload["kickoff_outputs_present"] is True
     assert "## Aggregated Outputs" in summary_text
+    assert candidate_dir.exists()
+    assert case_candidate.exists()
+    assert log_candidate.exists()
+    assert benchmark_candidate.exists()
+    assert result["candidate_exports"]["case_candidate"].endswith("case_candidate.md")
+    assert result["candidate_exports"]["benchmark_candidate"].endswith("benchmark_candidate.json")
