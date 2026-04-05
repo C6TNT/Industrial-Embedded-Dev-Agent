@@ -85,6 +85,15 @@ ieda check --include-rag --rag-type tool_safety
 
 如果后续仓库扩展出更重的 RAG 回归集，可以按改动范围选择对应的 `--rag-type`。
 
+仓库远端 CI 当前也分成两层：
+
+- `Quick Check`
+  面向日常 `push / pull_request`
+- `Full Check`
+  面向 `main` 分支和手动触发的更完整回归
+
+所以本地建议至少先把与你改动范围匹配的检查跑干净，再提 PR。
+
 ## 数据与资料贡献要求
 
 ### 日志样本

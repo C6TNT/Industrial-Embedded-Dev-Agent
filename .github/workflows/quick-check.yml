@@ -1,14 +1,13 @@
-name: CI
+name: Quick Check
 
 on:
   push:
     branches:
       - main
   pull_request:
-  workflow_dispatch:
 
 jobs:
-  local-validation:
+  quick-check:
     runs-on: windows-latest
     timeout-minutes: 20
 
@@ -24,8 +23,5 @@ jobs:
       - name: Install project with dev dependencies
         run: python -m pip install -e ".[dev]"
 
-      - name: Run default local validation bundle
+      - name: Run quick local validation bundle
         run: python -m industrial_embedded_dev_agent check
-
-      - name: Run focused RAG validation bundle
-        run: python -m industrial_embedded_dev_agent check --include-rag --rag-type tool_safety

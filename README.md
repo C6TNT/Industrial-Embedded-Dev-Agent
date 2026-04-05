@@ -155,12 +155,18 @@ ieda check --include-rag --rag-type tool_safety
 
 ### 远端 CI 当前会跑什么
 
-仓库当前已经配置 GitHub Actions，在 `push`、`pull_request` 和手动触发时自动执行：
+仓库当前已经拆成两层 GitHub Actions：
 
-- `python -m industrial_embedded_dev_agent check`
-- `python -m industrial_embedded_dev_agent check --include-rag --rag-type tool_safety`
+- `Quick Check`
+  在 `push / pull_request` 时默认执行，运行：
+  `python -m industrial_embedded_dev_agent check`
 
-也就是说，默认轻量回归和一组重点 RAG 回归，现在都已经有远端兜底。
+- `Full Check`
+  在 `main` 分支推送和手动触发时执行，运行：
+  `python -m industrial_embedded_dev_agent check`
+  `python -m industrial_embedded_dev_agent check --include-rag --rag-type tool_safety`
+
+也就是说，日常提交先走轻量兜底，较重的重点 RAG 回归则放在单独的完整检查里。
 
 ## 路线图
 
