@@ -4,6 +4,18 @@ import json
 from pathlib import Path
 
 
+def compare_latest_bench_packs_in_session(
+    root: Path,
+    session_id: str,
+    *,
+    output_path: Path | None = None,
+) -> dict[str, object]:
+    left_path, right_path = resolve_latest_bench_pack_pair(root, session_id)
+    summary = compare_bench_packs(root, left_path, right_path, output_path=output_path)
+    summary["session_id"] = session_id
+    return summary
+
+
 def compare_bench_packs(
     root: Path,
     left_path: Path,
@@ -20,6 +32,14 @@ def compare_bench_packs(
     destination.write_text(rendered, encoding="utf-8")
     summary["output_path"] = str(destination)
     return summary
+
+
+def resolve_latest_bench_pack_pair(root: Path, session_id: str) -> tuple[Path, Path]:
+    session_dir = root / "reports" / "bench_packs" / "sessions" / session_id
+    pack_paths = sorted(session_dir.glob("*.json"))
+    if len(pack_paths) < 2:
+        raise FileNotFoundError(f"Need at least two bench packs under session '{session_id}' to compare.")
+    return pack_paths[-2], pack_paths[-1]
 
 
 def summarize_bench_sessions(root: Path) -> dict[str, object]:

@@ -9,6 +9,7 @@ from pathlib import Path
 from .analysis import analyze_text
 from .bench_pack_render import (
     compare_bench_packs,
+    compare_latest_bench_packs_in_session,
     render_bench_pack_markdown,
     render_session_bundle_markdown,
     render_sessions_index_markdown,
@@ -125,9 +126,10 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_sessions_parser.add_argument("--render-index", action="store_true", help="Also render a Markdown index page under reports/bench_packs/rendered")
     tools_sessions_parser.add_argument("--output", help="Optional Markdown output path when used with --render-index")
 
-    tools_compare_parser = tools_subparsers.add_parser("compare-pack", help="Compare two bench-pack JSON files and summarize read-only snapshot differences")
-    tools_compare_parser.add_argument("left", help="Path to the earlier or baseline bench-pack JSON")
-    tools_compare_parser.add_argument("right", help="Path to the later bench-pack JSON")
+    tools_compare_parser = tools_subparsers.add_parser("compare-pack", help="Compare two bench-pack JSON files, or auto-compare the latest two packs in one session")
+    tools_compare_parser.add_argument("left", nargs="?", help="Path to the earlier or baseline bench-pack JSON")
+    tools_compare_parser.add_argument("right", nargs="?", help="Path to the later bench-pack JSON")
+    tools_compare_parser.add_argument("--session-id", help="Auto-select the latest two bench packs under this session_id")
     tools_compare_parser.add_argument("--output", help="Optional Markdown output path")
 
     tools_plan_parser = tools_subparsers.add_parser("plan", help="Plan a tool call without executing it")
@@ -310,6 +312,17 @@ def main() -> None:
             _print_json(summarize_bench_sessions(paths.root))
             return
         if args.tools_command == "compare-pack":
+            if args.session_id:
+                _print_json(
+                    compare_latest_bench_packs_in_session(
+                        paths.root,
+                        args.session_id,
+                        output_path=Path(args.output) if args.output else None,
+                    )
+                )
+                return
+            if not args.left or not args.right:
+                parser.error("tools compare-pack requires either --session-id or both left and right paths")
             _print_json(
                 compare_bench_packs(
                     paths.root,
