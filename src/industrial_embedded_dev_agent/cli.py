@@ -34,6 +34,7 @@ from .tools import (
     list_tools,
     apply_formal_merge,
     canonical_merge_preflight,
+    canonical_patch_helper,
     prepare_formal_merge_assistant,
     plan_pending_merge,
     plan_tool_request,
@@ -137,6 +138,7 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_apply_formal_merge_parser.add_argument("--dry-run", action="store_true", help="Generate review output only and do not create staging files")
     tools_apply_formal_merge_parser.add_argument("--execute", action="store_true", help="Write patch suggestions into a staging directory, without modifying canonical dataset files")
     tools_subparsers.add_parser("canonical-merge-preflight", help="Run read-only readiness checks before considering a canonical dataset merge")
+    tools_subparsers.add_parser("canonical-patch-helper", help="Generate canonical patch files and a manifest without modifying canonical dataset files")
     tools_kickoff_real_parser = tools_subparsers.add_parser("kickoff-real-bench", help="Read a real-bench plan seed and create the first read-only bench-pack")
     tools_kickoff_real_parser.add_argument("seed", help="Path to a generated plan_seed.json")
     tools_kickoff_real_parser.add_argument("--execute", action="store_true", help="Actually execute the seeded read-only request")
@@ -364,6 +366,9 @@ def main() -> None:
             return
         if args.tools_command == "canonical-merge-preflight":
             _print_json(canonical_merge_preflight(paths.root))
+            return
+        if args.tools_command == "canonical-patch-helper":
+            _print_json(canonical_patch_helper(paths.root))
             return
         if args.tools_command == "kickoff-real-bench":
             render_first_run = args.render_first_run or args.render_all

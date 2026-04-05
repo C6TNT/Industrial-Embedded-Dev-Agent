@@ -965,6 +965,86 @@ def canonical_merge_preflight(root: Path) -> dict[str, object]:
     }
 
 
+def canonical_patch_helper(root: Path) -> dict[str, object]:
+    assistant_dir = root / "data" / "pending" / "formal_merge_assistant"
+    patch_dir = assistant_dir / "canonical_patch_bundle"
+    patch_dir.mkdir(parents=True, exist_ok=True)
+
+    benchmark_patch_src = assistant_dir / "benchmark_append_patch.jsonl"
+    material_index_patch_src = assistant_dir / "material_index_append_patch.md"
+    materials_case_src = assistant_dir / "materials_case_merge_candidates.md"
+    commit_split_src = assistant_dir / "recommended_commit_split.md"
+
+    benchmark_target = root / "data" / "benchmark" / "benchmark_v1.jsonl"
+    material_index_target = root / "data" / "materials" / "material_index_v1.md"
+
+    materials_patch_dir = patch_dir / "data" / "materials"
+    benchmark_patch_dir = patch_dir / "data" / "benchmark"
+    materials_patch_dir.mkdir(parents=True, exist_ok=True)
+    benchmark_patch_dir.mkdir(parents=True, exist_ok=True)
+
+    benchmark_patch_dst = benchmark_patch_dir / "benchmark_v1.append.jsonl"
+    material_index_patch_dst = materials_patch_dir / "material_index_v1.append.md"
+    materials_case_dst = materials_patch_dir / "materials_case_merge_candidates.md"
+    commit_split_dst = patch_dir / "recommended_commit_split.md"
+
+    if benchmark_patch_src.exists():
+        shutil.copyfile(benchmark_patch_src, benchmark_patch_dst)
+    else:
+        benchmark_patch_dst.write_text("", encoding="utf-8")
+
+    if material_index_patch_src.exists():
+        shutil.copyfile(material_index_patch_src, material_index_patch_dst)
+    else:
+        material_index_patch_dst.write_text("# Material Index Append Patch\n\n- none\n", encoding="utf-8")
+
+    if materials_case_src.exists():
+        shutil.copyfile(materials_case_src, materials_case_dst)
+    else:
+        materials_case_dst.write_text("# Pending Case Merge Candidates\n\n- none\n", encoding="utf-8")
+
+    if commit_split_src.exists():
+        shutil.copyfile(commit_split_src, commit_split_dst)
+    else:
+        commit_split_dst.write_text("# Recommended Commit Split\n\n- none\n", encoding="utf-8")
+
+    manifest = {
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "assistant_dir": str(assistant_dir),
+        "canonical_targets": {
+            "benchmark": str(benchmark_target),
+            "material_index": str(material_index_target),
+            "materials_dir": str(root / "data" / "materials"),
+        },
+        "patch_files": {
+            "benchmark_append_patch": str(benchmark_patch_dst),
+            "material_index_append_patch": str(material_index_patch_dst),
+            "materials_case_candidates": str(materials_case_dst),
+            "recommended_commit_split": str(commit_split_dst),
+        },
+        "notes": [
+            "This bundle does not modify canonical files.",
+            "Review these patch files before any manual canonical merge.",
+        ],
+    }
+
+    manifest_json = patch_dir / "canonical_patch_manifest.json"
+    manifest_json.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    manifest_md = patch_dir / "canonical_patch_manifest.md"
+    manifest_md.write_text(_render_canonical_patch_manifest_markdown(manifest), encoding="utf-8")
+
+    return {
+        "output_dir": str(patch_dir),
+        "canonical_patch_manifest_json": str(manifest_json),
+        "canonical_patch_manifest_markdown": str(manifest_md),
+        "benchmark_append_patch": str(benchmark_patch_dst),
+        "material_index_append_patch": str(material_index_patch_dst),
+        "materials_case_candidates": str(materials_case_dst),
+        "recommended_commit_split": str(commit_split_dst),
+    }
+
+
 def build_bench_pack(
     root: Path,
     request: str,
@@ -2008,6 +2088,41 @@ def _render_canonical_merge_preflight_markdown(payload: dict[str, object]) -> st
     ]
     for item in payload.get("checks", []):
         lines.append(f"- {item.get('name', '')}: passed={item.get('passed', False)} details={item.get('details', '')}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _render_canonical_patch_manifest_markdown(manifest: dict[str, object]) -> str:
+    targets = manifest.get("canonical_targets", {})
+    patch_files = manifest.get("patch_files", {})
+    notes = manifest.get("notes", [])
+    lines = [
+        "# Canonical Patch Manifest",
+        "",
+        f"- generated_at: {manifest.get('generated_at', '')}",
+        f"- assistant_dir: {manifest.get('assistant_dir', '')}",
+        "",
+        "## Canonical Targets",
+        "",
+        f"- benchmark: {targets.get('benchmark', '')}",
+        f"- material_index: {targets.get('material_index', '')}",
+        f"- materials_dir: {targets.get('materials_dir', '')}",
+        "",
+        "## Patch Files",
+        "",
+        f"- benchmark_append_patch: {patch_files.get('benchmark_append_patch', '')}",
+        f"- material_index_append_patch: {patch_files.get('material_index_append_patch', '')}",
+        f"- materials_case_candidates: {patch_files.get('materials_case_candidates', '')}",
+        f"- recommended_commit_split: {patch_files.get('recommended_commit_split', '')}",
+        "",
+        "## Notes",
+        "",
+    ]
+    if notes:
+        for note in notes:
+            lines.append(f"- {note}")
+    else:
+        lines.append("- none")
     lines.append("")
     return "\n".join(lines)
 
