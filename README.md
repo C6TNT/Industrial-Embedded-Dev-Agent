@@ -123,6 +123,45 @@
 
 这样仓库会越用越像工业项目，而不是越做越像演示项目。
 
+## 本地验证与 CI
+
+当前仓库已经接入了一套最小可用的本地回归与 GitHub Actions CI。
+
+### 本地建议先跑
+
+默认回归：
+
+```bash
+ieda check
+```
+
+这条命令会统一执行：
+
+- `pytest`
+- `rules benchmark`
+- `tool_safety benchmark`
+
+如果你想额外检查一部分 RAG 能力，可以再跑：
+
+```bash
+ieda check --include-rag --rag-type tool_safety
+```
+
+当前支持的 `--rag-type` 有：
+
+- `knowledge_qa`
+- `log_attribution`
+- `tool_safety`
+
+### 远端 CI 当前会跑什么
+
+仓库当前已经配置 GitHub Actions，在 `push`、`pull_request` 和手动触发时自动执行：
+
+- `python -m industrial_embedded_dev_agent check`
+- `python -m industrial_embedded_dev_agent check --include-rag --rag-type tool_safety`
+
+也就是说，默认轻量回归和一组重点 RAG 回归，现在都已经有远端兜底。
+
 ## 路线图
 
 ### Phase 0：准备阶段

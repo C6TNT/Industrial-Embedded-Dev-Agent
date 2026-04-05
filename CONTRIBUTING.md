@@ -71,6 +71,20 @@
 - 验证方式
 - 后续待办
 
+在提交 PR 前，建议至少先跑：
+
+```bash
+ieda check
+```
+
+如果你的改动涉及检索、RAG、答案模板或引用排序，建议再额外跑：
+
+```bash
+ieda check --include-rag --rag-type tool_safety
+```
+
+如果后续仓库扩展出更重的 RAG 回归集，可以按改动范围选择对应的 `--rag-type`。
+
 ## 数据与资料贡献要求
 
 ### 日志样本
