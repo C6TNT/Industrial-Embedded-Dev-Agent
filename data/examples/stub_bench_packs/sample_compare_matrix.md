@@ -24,9 +24,9 @@ Use it when you want a stable regression target for:
 ## Recommended Commands
 
 ```powershell
-python -m industrial_embedded_dev_agent tools compare-pack "D:\桌面\Industrial Embedded Dev Agent\data\examples\stub_bench_packs\sample_nominal.json" "D:\桌面\Industrial Embedded Dev Agent\data\examples\stub_bench_packs\sample_axis1_fault.json"
-python -m industrial_embedded_dev_agent tools compare-pack "D:\桌面\Industrial Embedded Dev Agent\data\examples\stub_bench_packs\sample_nominal.json" "D:\桌面\Industrial Embedded Dev Agent\data\examples\stub_bench_packs\sample_encoder_stall.json"
-python -m industrial_embedded_dev_agent tools compare-pack "D:\桌面\Industrial Embedded Dev Agent\data\examples\stub_bench_packs\sample_nominal.json" "D:\桌面\Industrial Embedded Dev Agent\data\examples\stub_bench_packs\sample_open_rpmsg_fail.json"
+python -m industrial_embedded_dev_agent tools compare-pack "data/examples/stub_bench_packs/sample_nominal.json" "data/examples/stub_bench_packs/sample_axis1_fault.json"
+python -m industrial_embedded_dev_agent tools compare-pack "data/examples/stub_bench_packs/sample_nominal.json" "data/examples/stub_bench_packs/sample_encoder_stall.json"
+python -m industrial_embedded_dev_agent tools compare-pack "data/examples/stub_bench_packs/sample_nominal.json" "data/examples/stub_bench_packs/sample_open_rpmsg_fail.json"
 ```
 
 ## Review Checklist

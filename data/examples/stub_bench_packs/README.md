@@ -26,6 +26,8 @@ See also:
 
 - `sample_compare_matrix.md`
   A fixed compare checklist with expected deltas and suggested commands.
+- `offline_regression_guide.md`
+  A step-by-step rehearsal guide from stub scenario switching to session review.
 
 ## Notes
 
