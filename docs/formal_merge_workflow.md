@@ -135,6 +135,26 @@ ieda tools apply-formal-merge --dry-run
 - material index 应该补哪些行
 - 建议如何拆 commit，避免把材料整理、benchmark 变更、索引变更混在一起
 
+### 7. 执行 staging 模式
+
+```bash
+ieda tools apply-formal-merge --execute
+```
+
+这一步仍然不会修改 canonical 数据，但会把更接近真实并入动作的结果写到 staging 目录：
+
+- `data/pending/formal_merge_assistant/staging/data/materials/materials_case_merge_candidates.md`
+- `data/pending/formal_merge_assistant/staging/data/materials/material_index_append_patch.md`
+- `data/pending/formal_merge_assistant/staging/data/benchmark/benchmark_append_patch.jsonl`
+- `data/pending/formal_merge_assistant/staging/recommended_commit_split.md`
+- `data/pending/formal_merge_assistant/staging/staging_summary.json`
+
+这一步适合在下面这种场景使用：
+
+- 你已经完成了 pending 区审核
+- 你想先看到一份接近“真实 merge 前形态”的 staging 包
+- 但你还不希望工具直接写入 `data/materials/` 或 `data/benchmark/`
+
 ---
 
 ## 推荐人工审阅顺序
@@ -146,12 +166,15 @@ ieda tools apply-formal-merge --dry-run
 3. `data/pending/formal_merge_assistant/formal_merge_assistant.md`
 4. `data/pending/formal_merge_assistant/apply_formal_merge_dry_run.md`
 5. `data/pending/formal_merge_assistant/recommended_commit_split.md`
+6. `data/pending/formal_merge_assistant/staging/staging_summary.json`
 
 如果要进一步做实际并入，建议再分别查看：
 
 - `materials_case_merge_candidates.md`
 - `benchmark_append_patch.jsonl`
 - `material_index_append_patch.md`
+- `staging/data/materials/`
+- `staging/data/benchmark/`
 
 ---
 
@@ -163,6 +186,7 @@ ieda tools apply-formal-merge --dry-run
 - 不自动改 `data/materials/material_index_v1.md`
 - 不自动改 `data/benchmark/benchmark_v1.jsonl`
 - 不自动删除 pending 区候选
+- `--execute` 也只会写到 `data/pending/formal_merge_assistant/staging/`
 
 也就是说，当前工具会尽可能把“正式并入前的准备工作”做完，但最后的 canonical 数据修改仍然保留给人工确认。
 
@@ -201,7 +225,7 @@ ieda tools apply-formal-merge --dry-run
 
 如果后面要继续推进，最自然的方向是：
 
-1. 做 `apply-formal-merge --execute`，但第一版仍然只允许写到单独的 staging 目录
-2. 等人工确认 staging 结果后，再决定是否真正写入 canonical 数据
+1. 在人工确认过 staging 结果之后，再决定是否引入“canonical merge helper”
+2. 继续保持 benchmark 变更和 materials 变更分 commit 审阅
 
 这样既能提高 formal merge 的自动化程度，又不会过早突破当前项目的数据安全边界。

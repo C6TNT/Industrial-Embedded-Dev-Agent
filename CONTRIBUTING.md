@@ -136,8 +136,9 @@ ieda tools prep-real-bench --session-id <session-id> --label "<session label>"
 3. `ieda tools plan-pending-merge`
 4. `ieda tools prepare-formal-merge`
 5. `ieda tools apply-formal-merge --dry-run`
+6. 需要预演落地结果时，再执行 `ieda tools apply-formal-merge --execute`
 
-当前这条链只会生成审阅包和 patch 建议，不会直接修改 canonical 数据文件。
+当前这条链即使走到 `--execute`，也只会写入 staging 目录，不会直接修改 canonical 数据文件。
 
 ### 日志样本
 
