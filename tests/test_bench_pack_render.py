@@ -14,7 +14,7 @@ from industrial_embedded_dev_agent.bench_pack_render import (
 )
 from industrial_embedded_dev_agent.models import BenchmarkItem
 from industrial_embedded_dev_agent.runner import run_local_checks_with_options
-from industrial_embedded_dev_agent.tools import prepare_real_bench_package
+from industrial_embedded_dev_agent.tools import kickoff_real_bench, prepare_real_bench_package
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -330,3 +330,28 @@ def test_prepare_real_bench_package_generates_bundle(tmp_path: Path) -> None:
     assert "axis0/axis1" in seed_payload["request"]
     assert "tools plan" in seed_payload["commands"]["plan"]
     assert "--session-id bench-am-01" in seed_payload["commands"]["bench_pack"]
+
+
+def test_kickoff_real_bench_from_seed_plan_only(tmp_path: Path) -> None:
+    prep = prepare_real_bench_package(
+        REPO_ROOT,
+        session_id="bench-am-01",
+        label="Morning bench",
+        output_dir=tmp_path / "prep_bundle",
+    )
+
+    result = kickoff_real_bench(
+        REPO_ROOT,
+        Path(prep["plan_seed_path"]),
+        execute=False,
+    )
+
+    bench_pack = result["bench_pack"]
+    assert result["session_id"] == "bench-am-01"
+    assert result["execute"] is False
+    assert bench_pack["session_id"] == "bench-am-01"
+    assert "axis0/axis1" in bench_pack["request"]
+    assert bench_pack["result"]["plan"]["tool_id"] == "SCRIPT-004"
+    assert bench_pack["result"]["plan"]["risk_level"] == "L0_readonly"
+    assert bench_pack["result"]["execution"]["parsed_output"]["status"] == "skipped"
+    assert Path(bench_pack["saved_to"]).exists()

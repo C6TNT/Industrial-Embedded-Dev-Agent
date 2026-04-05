@@ -28,6 +28,7 @@ from .tools import (
     disable_wsl_stub_environment,
     get_execution_mode,
     inspect_wsl_environment,
+    kickoff_real_bench,
     list_stub_scenarios,
     list_tools,
     plan_tool_request,
@@ -114,6 +115,10 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_prep_real_parser.add_argument("--session-id", help="Stable identifier for the upcoming real bench session")
     tools_prep_real_parser.add_argument("--label", help="Optional human-friendly label for the prep pack")
     tools_prep_real_parser.add_argument("--output-dir", help="Optional output directory for the generated prep pack")
+    tools_kickoff_real_parser = tools_subparsers.add_parser("kickoff-real-bench", help="Read a real-bench plan seed and create the first read-only bench-pack")
+    tools_kickoff_real_parser.add_argument("seed", help="Path to a generated plan_seed.json")
+    tools_kickoff_real_parser.add_argument("--execute", action="store_true", help="Actually execute the seeded read-only request")
+    tools_kickoff_real_parser.add_argument("--timeout", type=int, default=20, help="Execution timeout in seconds")
     tools_setup_stub_parser = tools_subparsers.add_parser("setup-stub", help="Enable the no-hardware WSL stub mode for local testing")
     tools_setup_stub_parser.add_argument("--scenario", default="nominal", help="Stub scenario name, for example nominal or axis1_fault")
     tools_subparsers.add_parser("use-real", help="Disable stub mode and switch back to real-hardware execution")
@@ -293,6 +298,16 @@ def main() -> None:
                     session_id=args.session_id,
                     label=args.label,
                     output_dir=Path(args.output_dir) if args.output_dir else None,
+                )
+            )
+            return
+        if args.tools_command == "kickoff-real-bench":
+            _print_json(
+                kickoff_real_bench(
+                    paths.root,
+                    Path(args.seed),
+                    execute=args.execute,
+                    timeout_seconds=args.timeout,
                 )
             )
             return

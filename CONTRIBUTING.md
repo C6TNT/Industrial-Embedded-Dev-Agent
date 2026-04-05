@@ -116,6 +116,15 @@ ieda tools prep-real-bench --session-id <session-id> --label "<session label>"
 
 先生成一套 bench checklist / first-run / issue / review 资料包，再开始采证，这样后续沉淀为 case、benchmark 或 issue 会更顺。
 
+如果你是在回工位后的首轮真实 bench，会更推荐按下面顺序：
+
+1. `ieda tools prep-real-bench ...`
+2. `ieda tools kickoff-real-bench <plan_seed.json>`
+3. 确认 plan 结果仍是 `SCRIPT-004 / L0_readonly`
+4. 再决定是否显式加 `--execute`
+
+这样可以把“准备包 -> 首次只读采证”这条链尽量标准化。
+
 ### 日志样本
 
 建议尽量满足：

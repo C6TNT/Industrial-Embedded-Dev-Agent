@@ -258,6 +258,36 @@ def prepare_real_bench_package(
     }
 
 
+def kickoff_real_bench(
+    root: Path,
+    seed_path: Path,
+    *,
+    execute: bool = False,
+    timeout_seconds: int = 20,
+) -> dict[str, object]:
+    seed = json.loads(seed_path.read_text(encoding="utf-8"))
+    request = str(seed["request"])
+    session_id = str(seed["session_id"])
+    label = seed.get("label")
+
+    bench_pack = build_bench_pack(
+        root,
+        request,
+        session_id=session_id,
+        label=label if isinstance(label, str) else None,
+        execute=execute,
+        timeout_seconds=timeout_seconds,
+    )
+    return {
+        "seed_path": str(seed_path),
+        "request": request,
+        "session_id": session_id,
+        "label": label,
+        "execute": execute,
+        "bench_pack": bench_pack,
+    }
+
+
 def build_bench_pack(
     root: Path,
     request: str,

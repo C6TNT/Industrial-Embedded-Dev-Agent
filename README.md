@@ -133,6 +133,8 @@ ieda tools prep-real-bench --session-id bench-am-01 --label "Morning bench"
 
 它会在 `reports/real_bench_prep/<session_id>/` 下生成：
 
+- `doctor_snapshot.json`
+- `plan_seed.json`
 - `00_index.md`
 - `01_readiness_checklist.md`
 - `02_first_run_record.md`
@@ -140,6 +142,15 @@ ieda tools prep-real-bench --session-id bench-am-01 --label "Morning bench"
 - `04_session_review.md`
 
 这样回到工位后可以直接按顺序填，不用再手工整理模板。
+
+如果你想继续把这套准备包直接推进到“第一份只读证据包”，可以再执行：
+
+```bash
+ieda tools kickoff-real-bench "reports/real_bench_prep/<session_id>/plan_seed.json"
+```
+
+默认会先生成一份 `plan-only` 的 seeded `bench-pack`。  
+如果你已经确认环境可读，也可以显式加 `--execute`。
 
 ## 本地验证与 CI
 
