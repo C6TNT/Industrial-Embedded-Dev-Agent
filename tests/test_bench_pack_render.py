@@ -384,3 +384,32 @@ def test_kickoff_real_bench_can_render_first_run_draft(tmp_path: Path) -> None:
     assert "Session ID: bench-am-02" in markdown
     assert "Session label: Morning bench render" in markdown
     assert "tool_id: SCRIPT-004" in markdown
+
+
+def test_kickoff_real_bench_can_render_session_review_draft(tmp_path: Path) -> None:
+    prep = prepare_real_bench_package(
+        REPO_ROOT,
+        session_id="bench-am-03",
+        label="Morning bench review",
+        output_dir=tmp_path / "prep_bundle",
+    )
+
+    result = kickoff_real_bench(
+        REPO_ROOT,
+        Path(prep["plan_seed_path"]),
+        execute=False,
+        render_session_review=True,
+    )
+
+    bench_pack = result["bench_pack"]
+    rendered = result["rendered_session_review"]
+    output_path = Path(rendered["output_path"])
+    markdown = output_path.read_text(encoding="utf-8")
+
+    assert result["session_id"] == "bench-am-03"
+    assert rendered["template"] == "session-review"
+    assert Path(bench_pack["saved_to"]).exists()
+    assert output_path.exists()
+    assert "Session ID: bench-am-03" in markdown
+    assert "Session label: Morning bench review" in markdown
+    assert "## Final Session Verdict" in markdown

@@ -119,6 +119,7 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_kickoff_real_parser.add_argument("seed", help="Path to a generated plan_seed.json")
     tools_kickoff_real_parser.add_argument("--execute", action="store_true", help="Actually execute the seeded read-only request")
     tools_kickoff_real_parser.add_argument("--render-first-run", action="store_true", help="Also render the generated bench-pack into a first-run Markdown draft")
+    tools_kickoff_real_parser.add_argument("--render-session-review", action="store_true", help="Also render the generated bench-pack into a session-review Markdown draft")
     tools_kickoff_real_parser.add_argument("--timeout", type=int, default=20, help="Execution timeout in seconds")
     tools_setup_stub_parser = tools_subparsers.add_parser("setup-stub", help="Enable the no-hardware WSL stub mode for local testing")
     tools_setup_stub_parser.add_argument("--scenario", default="nominal", help="Stub scenario name, for example nominal or axis1_fault")
@@ -309,6 +310,7 @@ def main() -> None:
                     Path(args.seed),
                     execute=args.execute,
                     render_first_run=args.render_first_run,
+                    render_session_review=args.render_session_review,
                     timeout_seconds=args.timeout,
                 )
             )
