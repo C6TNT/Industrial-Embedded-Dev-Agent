@@ -315,9 +315,12 @@ def test_prepare_real_bench_package_generates_bundle(tmp_path: Path) -> None:
     assert "Git branch:" in index_text
     assert "Git commit:" in index_text
     assert "## Current Runtime Snapshot" in index_text
+    assert "## Included Files" in index_text
     assert "doctor_snapshot.json" in index_text
     assert "plan_seed.json" in index_text
     assert "tools use-real" in index_text
+    assert "kickoff-real-bench" in index_text
+    assert "--render-all" in index_text
     assert "Source template: real_bench_readiness_checklist.md" in readiness_text
     assert "Session label: Morning bench" in review_text
     assert doctor_payload["session_id"] == "bench-am-01"
