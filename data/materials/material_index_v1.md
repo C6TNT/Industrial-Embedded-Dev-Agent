@@ -20,6 +20,7 @@
 | DOC-008 | `资料/3-用户手册/2-11-Linux-RT系统测试手册.pdf` | pdf | RT 场景测试 | 适合作为实时性问题背景文档 |
 | DOC-009 | `资料/3-用户手册/2-12-IgH EtherCAT主站开发案例.pdf` | pdf | EtherCAT 主站开发 | 适合作为总线联调知识源 |
 | DOC-010 | `资料/3-用户手册/3-1-Linux系统使用手册.pdf` | pdf | Linux 系统使用与运维 | 适合作为部署和系统服务类问题背景 |
+| DOC-011 | `data/materials/stub_scenario_cases_v1.md` | md | 无硬件 stub 场景、bench-pack 差异演练、session review 演练 | 适合作为 compare-pack / session bundle / 离线联调回归种子 |
 
 ## 2. 已整理的 20 份日志样本
 
@@ -62,6 +63,9 @@
 | CASE-008 | `RPDO2` 一旦发数据就复现 `0x5437` | PDO 在线更新触发驱动器异常 | 阶段性只保留 RPDO2 映射，不在线下发该数据 | `pdo_online_update_risk` |
 | CASE-009 | COM3 不可用时难以持续联调 | 调试链路过度依赖串口 | 引入 SSH 无串口验证脚本 | `serial_dependency` |
 | CASE-010 | 编译链路出现大量 warning | 实验代码未清理、变量未使用、链路脏数据 | 用 build log 做静态样本清洗与质量门禁 | `build_hygiene_issue` |
+| CASE-011 | `axis1_fault` 场景下 axis1 返回 `errorCode=16/statusCode=144/axisStatus=9473`，axis0 保持正常 | 单轴异常快照与稳定轴形成对照，可用于验证 compare-pack 和 issue capture | 运行 `bench-pack` 并与 nominal 基线做 `compare-pack` | `stub_single_axis_fault` |
+| CASE-012 | `encoder_stall` 场景下 transport 可读，但多轮 poll 中 encoder 读数保持不变 | 链路仍可读但反馈停滞，适合演练“链路活着但反馈异常” | 保留前后两包并重点比对 encoder 字段 | `stub_encoder_stall` |
+| CASE-013 | `open_rpmsg_fail` 场景下 `OpenRpmsg=-1`，后续读数退化 | 更接近 RPMsg/握手初始化问题，而不是普通只读快照 | 优先执行 `probe_rpmsg_handshake` 风格检查，再决定是否继续采样 | `stub_transport_degraded` |
 
 ## 4. 已整理的 5 个常用脚本
 
