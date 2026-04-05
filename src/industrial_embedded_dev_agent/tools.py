@@ -790,6 +790,44 @@ def apply_formal_merge(root: Path, *, dry_run: bool = True) -> dict[str, object]
         encoding="utf-8",
     )
 
+    staging_dir = assistant_dir / "staging"
+    staged_files: dict[str, str] = {}
+    if not dry_run:
+        staging_materials_dir = staging_dir / "data" / "materials"
+        staging_benchmark_dir = staging_dir / "data" / "benchmark"
+        staging_materials_dir.mkdir(parents=True, exist_ok=True)
+        staging_benchmark_dir.mkdir(parents=True, exist_ok=True)
+
+        case_bundle_stage = staging_materials_dir / "materials_case_merge_candidates.md"
+        shutil.copyfile(assistant_dir / "materials_case_merge_candidates.md", case_bundle_stage)
+        staged_files["materials_case_merge_candidates"] = str(case_bundle_stage)
+
+        material_index_stage = staging_materials_dir / "material_index_append_patch.md"
+        shutil.copyfile(material_index_patch_lines_path, material_index_stage)
+        staged_files["material_index_append_patch"] = str(material_index_stage)
+
+        benchmark_stage = staging_benchmark_dir / "benchmark_append_patch.jsonl"
+        shutil.copyfile(benchmark_patch_path, benchmark_stage)
+        staged_files["benchmark_append_patch"] = str(benchmark_stage)
+
+        commit_plan_stage = staging_dir / "recommended_commit_split.md"
+        shutil.copyfile(commit_plan_path, commit_plan_stage)
+        staged_files["recommended_commit_split"] = str(commit_plan_stage)
+
+        staged_summary_path = staging_dir / "staging_summary.json"
+        staged_summary_payload = {
+            "mode": "staging_execute",
+            "staging_root": str(staging_dir),
+            "staged_files": staged_files,
+            "notes": [
+                "Canonical dataset files were not modified.",
+                "Review staged patch files before any manual canonical merge.",
+            ],
+        }
+        staged_summary_path.parent.mkdir(parents=True, exist_ok=True)
+        staged_summary_path.write_text(json.dumps(staged_summary_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        staged_files["staging_summary"] = str(staged_summary_path)
+
     return {
         "dry_run": dry_run,
         "output_dir": str(assistant_dir),
@@ -799,6 +837,8 @@ def apply_formal_merge(root: Path, *, dry_run: bool = True) -> dict[str, object]
         "benchmark_append_patch": str(benchmark_patch_path),
         "material_index_append_patch": str(material_index_patch_lines_path),
         "recommended_commit_split": str(commit_plan_path),
+        "staging_root": str(staging_dir) if not dry_run else "",
+        "staged_files": staged_files,
     }
 
 

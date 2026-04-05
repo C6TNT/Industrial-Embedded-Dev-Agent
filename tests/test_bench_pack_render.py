@@ -853,3 +853,60 @@ def test_apply_formal_merge_generates_dry_run_summary(tmp_path: Path) -> None:
         assert "formal-benchmark-appends" in commit_plan_text
     finally:
         _reset_pending_root()
+
+
+def test_apply_formal_merge_execute_writes_staging_only(tmp_path: Path) -> None:
+    session_id = "bench-am-12"
+    session_dir = REPO_ROOT / "reports" / "bench_packs" / "sessions" / session_id
+    if session_dir.exists():
+        shutil.rmtree(session_dir)
+
+    benchmark_target = REPO_ROOT / "data" / "benchmark" / "benchmark_v1.jsonl"
+    benchmark_before = benchmark_target.read_text(encoding="utf-8")
+
+    _reset_pending_root()
+    try:
+        prep = prepare_real_bench_package(
+            REPO_ROOT,
+            session_id=session_id,
+            label="Morning bench apply execute staging",
+            output_dir=tmp_path / "prep_bundle",
+        )
+
+        kickoff_real_bench(
+            REPO_ROOT,
+            Path(prep["plan_seed_path"]),
+            execute=False,
+            render_first_run=True,
+            render_session_review=True,
+        )
+        finish_real_bench(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        review_finish_candidates(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        promote_finish_candidates(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+
+        result = apply_formal_merge(REPO_ROOT, dry_run=False)
+        staging_root = Path(result["staging_root"])
+        staged_files = result["staged_files"]
+
+        assert result["dry_run"] is False
+        assert staging_root.exists()
+        assert (staging_root / "data" / "materials" / "materials_case_merge_candidates.md").exists()
+        assert (staging_root / "data" / "materials" / "material_index_append_patch.md").exists()
+        assert (staging_root / "data" / "benchmark" / "benchmark_append_patch.jsonl").exists()
+        assert (staging_root / "staging_summary.json").exists()
+        assert "benchmark_append_patch" in staged_files
+        assert benchmark_target.read_text(encoding="utf-8") == benchmark_before
+    finally:
+        _reset_pending_root()

@@ -132,8 +132,9 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_promote_candidates_parser.add_argument("--prep-dir", help="Optional prep bundle directory if it is not under reports/real_bench_prep/<session_id>")
     tools_subparsers.add_parser("plan-pending-merge", help="Generate a merge plan for items currently staged under data/pending")
     tools_subparsers.add_parser("prepare-formal-merge", help="Generate draft bundles and append-ready files for curated formal dataset updates")
-    tools_apply_formal_merge_parser = tools_subparsers.add_parser("apply-formal-merge", help="Prepare a dry-run summary of how pending items would be merged into canonical data")
-    tools_apply_formal_merge_parser.add_argument("--dry-run", action="store_true", help="Explicitly run in dry-run mode (the only supported mode in v1)")
+    tools_apply_formal_merge_parser = tools_subparsers.add_parser("apply-formal-merge", help="Prepare dry-run output or stage formal-merge patch files without touching canonical data")
+    tools_apply_formal_merge_parser.add_argument("--dry-run", action="store_true", help="Generate review output only and do not create staging files")
+    tools_apply_formal_merge_parser.add_argument("--execute", action="store_true", help="Write patch suggestions into a staging directory, without modifying canonical dataset files")
     tools_kickoff_real_parser = tools_subparsers.add_parser("kickoff-real-bench", help="Read a real-bench plan seed and create the first read-only bench-pack")
     tools_kickoff_real_parser.add_argument("seed", help="Path to a generated plan_seed.json")
     tools_kickoff_real_parser.add_argument("--execute", action="store_true", help="Actually execute the seeded read-only request")
@@ -357,7 +358,7 @@ def main() -> None:
             _print_json(prepare_formal_merge_assistant(paths.root))
             return
         if args.tools_command == "apply-formal-merge":
-            _print_json(apply_formal_merge(paths.root, dry_run=True))
+            _print_json(apply_formal_merge(paths.root, dry_run=not args.execute))
             return
         if args.tools_command == "kickoff-real-bench":
             render_first_run = args.render_first_run or args.render_all
