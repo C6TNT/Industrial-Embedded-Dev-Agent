@@ -624,12 +624,15 @@ def test_review_finish_candidates_generates_review_summary(tmp_path: Path) -> No
     assert review_payload["quality_level"] == "weak"
     assert isinstance(review_payload["quality_score"], int)
     assert review_payload["quality_warning_categories"] == ["weak_content"]
+    assert review_payload["quality_guidance"] == ["先加强摘要、问题描述或证据表达，再继续推进。"]
     assert review_payload["review_recommendation"] == "edit_before_promote"
     assert "## Reviewer Checklist" in review_text
     assert "suggested_tag" in review_text
     assert "## Candidate Quality Check" in review_text
     assert "quality_level: weak" in review_text
     assert "quality_warning_categories: weak_content" in review_text
+    assert "### Quality Guidance" in review_text
+    assert "先加强摘要、问题描述或证据表达，再继续推进。" in review_text
     assert "quality_summary_path" in review_text
     assert "review_recommendation" in review_text
 
@@ -762,9 +765,13 @@ def test_promote_finish_candidates_copies_into_pending_area(tmp_path: Path) -> N
         assert len(pending_lines) == 1
         assert record_payload["session_id"] == session_id
         assert record_payload["review_recommendation"] == "edit_before_promote"
+        assert record_payload["quality_warning_categories"] == ["weak_content"]
+        assert record_payload["promotion_guidance"] == ["先加强摘要、问题描述或证据表达，再继续推进。"]
         assert record_payload["soft_blocked"] is True
         assert record_payload["next_step"] == "run_manual_edit"
         assert "edit_before_promote" in record_payload["promotion_warning"]
+        assert "## Promotion Guidance" in record_text
+        assert "先加强摘要、问题描述或证据表达，再继续推进。" in record_text
         assert "review_recommendation: edit_before_promote" in record_text
         assert "next_step: run_manual_edit" in record_text
         assert result["review_recommendation"] == "edit_before_promote"

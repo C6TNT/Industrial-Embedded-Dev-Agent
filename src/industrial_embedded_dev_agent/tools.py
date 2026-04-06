@@ -431,6 +431,7 @@ def review_finish_candidates(
         "quality_score": quality_payload.get("quality_score", 0),
         "quality_warnings": quality_payload.get("warnings", []),
         "quality_warning_categories": quality_payload.get("warning_categories", []),
+        "quality_guidance": _guidance_for_warning_categories(quality_payload.get("warning_categories", [])),
         "quality_summary_path": str(quality_json_path) if quality_json_path.exists() else "",
     }
     review_payload["review_recommendation"] = _review_recommendation(review_payload)
@@ -608,6 +609,8 @@ def promote_finish_candidates(
         "candidate_dir": str(candidate_dir),
         "review_summary_path": str(review_summary_path) if review_summary_path.exists() else "",
         "review_recommendation": review_recommendation,
+        "quality_warning_categories": review_payload.get("quality_warning_categories", []),
+        "promotion_guidance": _guidance_for_warning_categories(review_payload.get("quality_warning_categories", [])),
         "soft_blocked": soft_blocked,
         "next_step": next_step,
         "promotion_warning": promotion_warning,
@@ -2466,6 +2469,26 @@ def _collect_warning_categories(results: list[dict[str, object]]) -> list[str]:
     return categories
 
 
+def _guidance_for_warning_categories(categories: object) -> list[str]:
+    if not isinstance(categories, list):
+        return []
+
+    guidance_map = {
+        "missing_file": "补齐缺失 candidate 文件后，再进入 review 和 promotion。",
+        "missing_fields": "先补齐关键字段和必要 section，再继续推进。",
+        "weak_content": "先加强摘要、问题描述或证据表达，再继续推进。",
+        "review_noise": "先清理命名、标签或低价值噪音信息，再继续推进。",
+    }
+
+    guidance: list[str] = []
+    for category in categories:
+        normalized = str(category).strip()
+        message = guidance_map.get(normalized)
+        if message and message not in guidance:
+            guidance.append(message)
+    return guidance
+
+
 def _load_promotion_records(promotion_records_dir: Path) -> dict[str, dict[str, object]]:
     if not promotion_records_dir.exists():
         return {}
@@ -2650,6 +2673,16 @@ def _render_finish_candidate_review_markdown(
     else:
         insertion_index = lines.index("## Benchmark Preview")
         lines[insertion_index:insertion_index] = ["- none", ""]
+
+    quality_guidance = review_payload.get("quality_guidance", [])
+    guidance_block = ["### Quality Guidance", ""]
+    if quality_guidance:
+        guidance_block.extend([f"- {item}" for item in quality_guidance])
+    else:
+        guidance_block.append("- none")
+    guidance_block.append("")
+    insertion_index = lines.index("## Benchmark Preview")
+    lines[insertion_index:insertion_index] = guidance_block
     return "\n".join(lines)
 
 
@@ -2662,9 +2695,21 @@ def _render_promotion_record_markdown(promotion_record: dict[str, object]) -> st
         f"- candidate_dir: {promotion_record.get('candidate_dir', '')}",
         f"- review_summary_path: {promotion_record.get('review_summary_path', '')}",
         f"- review_recommendation: {promotion_record.get('review_recommendation', '')}",
+        f"- quality_warning_categories: {', '.join(promotion_record.get('quality_warning_categories', []))}",
         f"- soft_blocked: {promotion_record.get('soft_blocked', False)}",
         f"- next_step: {promotion_record.get('next_step', '')}",
         f"- promotion_warning: {promotion_record.get('promotion_warning', '')}",
+        "",
+        "## Promotion Guidance",
+        "",
+    ]
+    promotion_guidance = promotion_record.get("promotion_guidance", [])
+    if promotion_guidance:
+        lines.extend([f"- {item}" for item in promotion_guidance])
+    else:
+        lines.append("- none")
+
+    lines.extend([
         "",
         "## Promoted Files",
         "",
@@ -2673,7 +2718,7 @@ def _render_promotion_record_markdown(promotion_record: dict[str, object]) -> st
         f"- benchmark: {promotion_record.get('promoted_benchmark_path', '')}",
         f"- pending_benchmark_jsonl: {promotion_record.get('pending_benchmark_jsonl', '')}",
         "",
-    ]
+    ])
     return "\n".join(lines)
 
 
