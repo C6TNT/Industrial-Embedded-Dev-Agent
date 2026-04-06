@@ -496,3 +496,19 @@ Rules:
 - candidates are ordered by `quality_score` descending
 - both `eligible` and `deferred` items can appear in the summary
 - the summary does not override `eligible/deferred` routing; it only improves review ergonomics
+## review_now / watch / blocked
+
+The top review summary now carries a lightweight review-priority bucket in addition to the existing merge signals.
+
+Purpose:
+- help human reviewers decide what to inspect first
+- separate immediate review targets from items that should only be monitored
+- make blocked items obvious without reading the full deferred section first
+
+Current interpretation:
+- `review_now`: review first
+- `watch`: keep visible, but not first priority
+- `blocked`: do not advance until the blocker is addressed
+
+This bucket is derived from the existing merge state and remains a presentation-layer shortcut.
+It does not override `eligible/deferred`, `review_recommendation`, or `next_step`.

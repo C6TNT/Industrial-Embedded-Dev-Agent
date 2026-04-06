@@ -299,3 +299,11 @@ The current expectation is:
 - highest-value candidates appear first
 - both `eligible` and `deferred` items may appear there
 - the section is only a review aid and must stay consistent with the full lists below it
+## Review Priority Bucket Note
+
+If you change merge planning summaries, also verify the review-priority buckets shown in the top summary.
+
+Current expectation:
+- `review_now` should highlight the best immediate review targets
+- `watch` should cover deferred-but-still-relevant items
+- `blocked` should stay reserved for candidates that clearly should not move forward yet

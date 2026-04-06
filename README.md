@@ -399,3 +399,20 @@ Current behavior:
 - each entry shows `quality_level`, `quality_score`, `review_recommendation`, and `next_step`
 - entries are sorted by `quality_score` descending
 - the section is a review shortcut only; it does not change the underlying gating rules
+## Review Priority Buckets
+
+The `Top Candidates To Review First` summary now exposes an extra review-focused priority label:
+- `review_now`
+- `watch`
+- `blocked`
+
+Current intent:
+- `review_now`: candidates already worth immediate reviewer attention, usually eligible items
+- `watch`: deferred items that are not fully blocked, but still worth keeping in view
+- `blocked`: items that should not move forward until manual analysis or stronger evidence is added
+
+These buckets are only review aids. They do not replace:
+- `quality_score`
+- `quality_level`
+- `review_recommendation`
+- `next_step`
