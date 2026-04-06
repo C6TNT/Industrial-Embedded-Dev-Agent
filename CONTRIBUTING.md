@@ -278,3 +278,16 @@ ieda tools prep-real-bench --session-id <session-id> --label "<session label>"
 - 是否进入 eligible 候选
 - 是否进入 deferred 路径
 - `apply-formal-merge` 是否提示继续推进
+## Quality Score Note
+
+If your change touches the candidate-quality or pending-merge flow, please also check whether `quality_score` still behaves reasonably.
+
+Current intent:
+- `quality_score` gives a rough sortable signal for candidate quality.
+- `quality_level` remains the human-readable class (`good / weak / blocked`).
+- `review_recommendation` and `next_step` are downstream actions, not replacements for the score.
+
+Before merging these changes, it is useful to confirm:
+- lower-quality candidates really receive lower `quality_score`
+- `merge_plan` and `formal_merge_assistant` still surface the score in Markdown output
+- the score does not contradict the visible `quality_level`

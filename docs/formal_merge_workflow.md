@@ -460,3 +460,23 @@ ieda tools canonical-merge-checklist
 - 候选质量属于 `good / weak / blocked`
 - 机器建议是继续 promote、先编辑，还是先停下分析
 - 为什么某条候选会被放进 deferred，而不是继续进入 formal merge bundle
+## quality_score in the Formal Merge Flow
+
+`quality_score` is now propagated together with the existing merge-gating signals.
+
+Purpose:
+- give a lightweight numeric cue for ranking and triage
+- help compare multiple `weak` candidates
+- make `eligible` and `deferred` lists easier to prioritize during manual review
+
+Current flow:
+1. `candidate-quality-check` generates `quality_score`
+2. `review-finish-candidates` carries it into review summaries
+3. `promote-finish-candidates` preserves the review outcome
+4. `plan-pending-merge` shows `quality_score` for eligible and deferred candidates
+5. `prepare-formal-merge` surfaces the score in the assistant bundle
+
+Interpretation guidance:
+- treat the score as a ranking helper, not a canonical truth value
+- rely on `quality_level` for the main class boundary
+- rely on `review_recommendation` and `next_step` for workflow decisions

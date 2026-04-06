@@ -367,3 +367,21 @@ ieda tools canonical-merge-checklist
 - `apply-formal-merge`
 
 因此当前 formal merge 链已经不是“只看有没有 warning”，而是会把候选质量、机器建议和下一步动作一起保留下来。
+## Quality Score Semantics
+
+The candidate quality pipeline now carries a lightweight `quality_score` in addition to `quality_level`.
+
+- `quality_score` is a heuristic score in the `0-100` range.
+- It is meant for ranking, triage, and quick comparison between candidates.
+- It does not replace `quality_level`, `review_recommendation`, or `next_step`; it complements them.
+
+Recommended interpretation:
+- `90-100`: strong candidate, usually consistent with `good`
+- `60-89`: usable but needs attention, often consistent with `weak`
+- `0-59`: poor or incomplete candidate, often consistent with `blocked`
+
+The current merge chain now preserves all four quality signals together:
+- `quality_score`
+- `quality_level`
+- `review_recommendation`
+- `next_step`
