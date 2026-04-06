@@ -447,6 +447,65 @@ def review_finish_candidates(
     }
 
 
+def candidate_quality_check(
+    root: Path,
+    *,
+    session_id: str,
+    prep_dir: Path | None = None,
+) -> dict[str, object]:
+    resolved_prep_dir = prep_dir or (root / "reports" / "real_bench_prep" / session_id)
+    finish_dir = resolved_prep_dir / "finish_outputs"
+    candidate_dir = finish_dir / "candidate_exports"
+    quality_dir = finish_dir / "candidate_quality_check"
+    quality_dir.mkdir(parents=True, exist_ok=True)
+
+    case_path = candidate_dir / "case_candidate.md"
+    log_path = candidate_dir / "log_candidate.json"
+    benchmark_path = candidate_dir / "benchmark_candidate.json"
+
+    case_text = case_path.read_text(encoding="utf-8") if case_path.exists() else ""
+    log_payload = json.loads(log_path.read_text(encoding="utf-8")) if log_path.exists() else {}
+    benchmark_payload = json.loads(benchmark_path.read_text(encoding="utf-8")) if benchmark_path.exists() else {}
+
+    case_result = _evaluate_case_candidate(case_path, case_text)
+    log_result = _evaluate_log_candidate(log_path, log_payload)
+    benchmark_result = _evaluate_benchmark_candidate(benchmark_path, benchmark_payload)
+
+    warnings = [*case_result["warnings"], *log_result["warnings"], *benchmark_result["warnings"]]
+    overall_passed = bool(case_result["passed"] and log_result["passed"] and benchmark_result["passed"])
+    next_action = (
+        "Candidate set looks good enough for manual review. Continue with review-finish-candidates."
+        if overall_passed
+        else "Review the warnings first, then edit weak candidate drafts before promotion."
+    )
+
+    payload = {
+        "session_id": session_id,
+        "candidate_dir": str(candidate_dir),
+        "overall_passed": overall_passed,
+        "case_candidate": case_result,
+        "log_candidate": log_result,
+        "benchmark_candidate": benchmark_result,
+        "warnings": warnings,
+        "next_action": next_action,
+    }
+
+    quality_json_path = quality_dir / "candidate_quality_check.json"
+    quality_json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    quality_md_path = quality_dir / "candidate_quality_check.md"
+    quality_md_path.write_text(_render_candidate_quality_check_markdown(payload), encoding="utf-8")
+
+    return {
+        "session_id": session_id,
+        "candidate_dir": str(candidate_dir),
+        "output_dir": str(quality_dir),
+        "candidate_quality_check_json": str(quality_json_path),
+        "candidate_quality_check_markdown": str(quality_md_path),
+        "overall_passed": overall_passed,
+    }
+
+
 def promote_finish_candidates(
     root: Path,
     *,
@@ -2047,6 +2106,99 @@ def _candidate_issue_tag(parsed: dict[str, object], plan: dict[str, object]) -> 
     return "finish_pack_review"
 
 
+def _evaluate_case_candidate(path: Path, text: str) -> dict[str, object]:
+    warnings: list[str] = []
+    exists = path.exists()
+    if not exists:
+        warnings.append("case candidate file is missing")
+        return {"exists": False, "passed": False, "warnings": warnings, "length": 0}
+
+    normalized = text.strip()
+    length = len(normalized)
+    if length < 120:
+        warnings.append("case candidate content is very short")
+    if "## Observed Summary" not in text:
+        warnings.append("case candidate is missing the observed summary section")
+    if "## Suggested Next Step" not in text:
+        warnings.append("case candidate is missing the suggested next step section")
+
+    return {
+        "exists": True,
+        "passed": len(warnings) == 0,
+        "warnings": warnings,
+        "length": length,
+    }
+
+
+def _evaluate_log_candidate(path: Path, payload: dict[str, object]) -> dict[str, object]:
+    warnings: list[str] = []
+    exists = path.exists()
+    if not exists:
+        warnings.append("log candidate file is missing")
+        return {"exists": False, "passed": False, "warnings": warnings}
+
+    required_fields = ["session_id", "suggested_tag", "tool_id", "risk_level", "parsed_output"]
+    missing_fields = [field for field in required_fields if not payload.get(field)]
+    if missing_fields:
+        warnings.append(f"log candidate is missing required fields: {', '.join(missing_fields)}")
+
+    suggested_tag = str(payload.get("suggested_tag", "")).strip()
+    if not suggested_tag:
+        warnings.append("log candidate suggested_tag is empty")
+    elif len(suggested_tag) < 4:
+        warnings.append("log candidate suggested_tag looks too weak")
+
+    parsed_output = payload.get("parsed_output", {})
+    if not isinstance(parsed_output, dict) or not parsed_output:
+        warnings.append("log candidate parsed_output is empty")
+    elif not str(parsed_output.get("summary", "")).strip():
+        warnings.append("log candidate parsed_output.summary is empty")
+
+    return {
+        "exists": True,
+        "passed": len(warnings) == 0,
+        "warnings": warnings,
+        "required_fields_present": len(missing_fields) == 0,
+    }
+
+
+def _evaluate_benchmark_candidate(path: Path, payload: dict[str, object]) -> dict[str, object]:
+    warnings: list[str] = []
+    exists = path.exists()
+    if not exists:
+        warnings.append("benchmark candidate file is missing")
+        return {"exists": False, "passed": False, "warnings": warnings}
+
+    candidate_id = str(payload.get("id", "")).strip()
+    item_type = str(payload.get("item_type", "")).strip()
+    question = str(payload.get("input", {}).get("question", "")).strip()
+    tags = payload.get("tags", [])
+    must_include = payload.get("expected", {}).get("must_include", [])
+
+    if not candidate_id:
+        warnings.append("benchmark candidate id is empty")
+    elif not re.fullmatch(r"candidate-[a-z0-9][a-z0-9_-]*", candidate_id):
+        warnings.append("benchmark candidate id does not match the expected candidate-* style")
+
+    if not item_type:
+        warnings.append("benchmark candidate item_type is empty")
+    if not question:
+        warnings.append("benchmark candidate question is empty")
+    elif len(question) < 12:
+        warnings.append("benchmark candidate question is too short")
+    if not isinstance(tags, list) or not tags:
+        warnings.append("benchmark candidate tags are empty")
+    if not isinstance(must_include, list) or not must_include:
+        warnings.append("benchmark candidate expected.must_include is empty")
+
+    return {
+        "exists": True,
+        "passed": len(warnings) == 0,
+        "warnings": warnings,
+        "candidate_id": candidate_id,
+    }
+
+
 def _render_finish_candidate_review_markdown(
     review_payload: dict[str, object],
     *,
@@ -2088,6 +2240,46 @@ def _render_finish_candidate_review_markdown(
         "- Should this candidate stay as a draft, be edited, or be promoted into the formal dataset?",
         "",
     ]
+    return "\n".join(lines)
+
+
+def _render_candidate_quality_check_markdown(payload: dict[str, object]) -> str:
+    lines = [
+        "# Candidate Quality Check",
+        "",
+        f"- Session ID: {payload.get('session_id', '')}",
+        f"- candidate_dir: {payload.get('candidate_dir', '')}",
+        f"- overall_passed: {payload.get('overall_passed', False)}",
+        f"- next_action: {payload.get('next_action', '')}",
+        "",
+        "## Case Candidate",
+        "",
+        f"- exists: {payload.get('case_candidate', {}).get('exists', False)}",
+        f"- passed: {payload.get('case_candidate', {}).get('passed', False)}",
+        f"- length: {payload.get('case_candidate', {}).get('length', 0)}",
+        "",
+        "## Log Candidate",
+        "",
+        f"- exists: {payload.get('log_candidate', {}).get('exists', False)}",
+        f"- passed: {payload.get('log_candidate', {}).get('passed', False)}",
+        f"- required_fields_present: {payload.get('log_candidate', {}).get('required_fields_present', False)}",
+        "",
+        "## Benchmark Candidate",
+        "",
+        f"- exists: {payload.get('benchmark_candidate', {}).get('exists', False)}",
+        f"- passed: {payload.get('benchmark_candidate', {}).get('passed', False)}",
+        f"- candidate_id: {payload.get('benchmark_candidate', {}).get('candidate_id', '')}",
+        "",
+        "## Warnings",
+        "",
+    ]
+    warnings = payload.get("warnings", [])
+    if warnings:
+        for warning in warnings:
+            lines.append(f"- {warning}")
+    else:
+        lines.append("- none")
+    lines.append("")
     return "\n".join(lines)
 
 

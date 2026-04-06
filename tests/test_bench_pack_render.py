@@ -14,7 +14,7 @@ from industrial_embedded_dev_agent.bench_pack_render import (
 )
 from industrial_embedded_dev_agent.models import BenchmarkItem
 from industrial_embedded_dev_agent.runner import run_local_checks_with_options
-from industrial_embedded_dev_agent.tools import apply_formal_merge, canonical_merge_checklist, canonical_merge_preflight, canonical_merge_preview_bundle, canonical_merge_report, canonical_patch_helper, finish_real_bench, kickoff_real_bench, plan_pending_merge, prepare_formal_merge_assistant, prepare_real_bench_package, promote_finish_candidates, review_finish_candidates
+from industrial_embedded_dev_agent.tools import apply_formal_merge, candidate_quality_check, canonical_merge_checklist, canonical_merge_preflight, canonical_merge_preview_bundle, canonical_merge_report, canonical_patch_helper, finish_real_bench, kickoff_real_bench, plan_pending_merge, prepare_formal_merge_assistant, prepare_real_bench_package, promote_finish_candidates, review_finish_candidates
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -617,6 +617,55 @@ def test_review_finish_candidates_generates_review_summary(tmp_path: Path) -> No
     assert review_payload["session_id"] == session_id
     assert "## Reviewer Checklist" in review_text
     assert "suggested_tag" in review_text
+
+
+def test_candidate_quality_check_generates_quality_summary(tmp_path: Path) -> None:
+    session_id = "bench-am-18"
+    session_dir = REPO_ROOT / "reports" / "bench_packs" / "sessions" / session_id
+    if session_dir.exists():
+        shutil.rmtree(session_dir)
+
+    prep = prepare_real_bench_package(
+        REPO_ROOT,
+        session_id=session_id,
+        label="Morning bench candidate quality check",
+        output_dir=tmp_path / "prep_bundle",
+    )
+
+    kickoff_real_bench(
+        REPO_ROOT,
+        Path(prep["plan_seed_path"]),
+        execute=False,
+        render_first_run=True,
+        render_session_review=True,
+    )
+    finish_real_bench(
+        REPO_ROOT,
+        session_id=session_id,
+        prep_dir=Path(prep["output_dir"]),
+    )
+
+    result = candidate_quality_check(
+        REPO_ROOT,
+        session_id=session_id,
+        prep_dir=Path(prep["output_dir"]),
+    )
+
+    quality_dir = Path(result["output_dir"])
+    quality_json = quality_dir / "candidate_quality_check.json"
+    quality_md = quality_dir / "candidate_quality_check.md"
+    payload = json.loads(quality_json.read_text(encoding="utf-8"))
+    text = quality_md.read_text(encoding="utf-8")
+
+    assert quality_dir.exists()
+    assert quality_json.exists()
+    assert quality_md.exists()
+    assert payload["session_id"] == session_id
+    assert payload["case_candidate"]["exists"] is True
+    assert payload["log_candidate"]["exists"] is True
+    assert payload["benchmark_candidate"]["exists"] is True
+    assert "## Warnings" in text
+    assert "## Benchmark Candidate" in text
 
 
 def test_promote_finish_candidates_copies_into_pending_area(tmp_path: Path) -> None:
