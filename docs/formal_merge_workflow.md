@@ -373,3 +373,41 @@ ieda tools canonical-merge-checklist
 2. 继续保持 benchmark 变更和 materials 变更分 commit 审阅
 
 这样既能提高 formal merge 的自动化程度，又不会过早突破当前项目的数据安全边界。
+
+---
+
+## New Gating Rule
+
+从当前版本开始，formal merge 链已经不再把所有 pending 候选默认一路往后推，而是先做自动分流：
+
+1. `candidate-quality-check`
+2. `review-finish-candidates`
+3. `promote-finish-candidates`
+4. `plan-pending-merge`
+5. `prepare-formal-merge`
+6. `apply-formal-merge`
+
+关键约束是：
+
+- `review-finish-candidates` 产出 `review_recommendation`
+- `promote-finish-candidates` 把它映射成 `next_step`
+- `plan-pending-merge` 只保留 `next_step = continue_to_pending_merge` 的 eligible 候选
+- 其余候选进入 `deferred_candidates`
+- `prepare-formal-merge` 和 `apply-formal-merge` 都只消费 eligible 候选
+
+### `next_step` 语义
+
+- `continue_to_pending_merge`
+  候选可以继续进入 formal merge 准备链
+- `run_manual_edit`
+  候选需要先手工润色或补材料，再重新进入 review/promote
+- `stop_and_analyze`
+  候选当前不适合继续推进，应该先回到 bench 证据或人工分析
+
+### 对 apply 阶段的影响
+
+当没有 eligible 候选时：
+
+- `apply-formal-merge --dry-run` 会返回 `status = no_eligible_candidates`
+- `apply-formal-merge --execute` 的 staging summary 也会保留同样状态
+- 这不是错误，而是明确的“当前无需推进 formal merge”信号

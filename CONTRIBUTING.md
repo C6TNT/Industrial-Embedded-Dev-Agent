@@ -228,3 +228,27 @@ ieda tools prep-real-bench --session-id <session-id> --label "<session label>"
 - 它能不能沉淀经验
 - 它能不能被 benchmark 持续检验
 - 它在安全边界内是否可控
+
+## Candidate Gating Note
+
+如果你的改动涉及：
+
+- `candidate-quality-check`
+- `review-finish-candidates`
+- `promote-finish-candidates`
+- `plan-pending-merge`
+- `prepare-formal-merge`
+- `apply-formal-merge`
+
+请注意当前仓库已经引入了候选自动分流规则：
+
+- `review_recommendation` 是机器建议，不会直接替你拒绝操作
+- `promote-finish-candidates` 会把建议落成 `next_step`
+- 只有 `next_step = continue_to_pending_merge` 的候选会继续进入 formal merge 链
+- `run_manual_edit / stop_and_analyze` 会进入 deferred 路径
+
+这类改动提交前，建议至少确认：
+
+- promotion record 里的 `review_recommendation / next_step / soft_blocked` 是否合理
+- merge plan 里的 `eligible` 和 `deferred` 是否符合预期
+- `apply-formal-merge` 在没有 eligible 候选时是否能明确提示无需继续推进

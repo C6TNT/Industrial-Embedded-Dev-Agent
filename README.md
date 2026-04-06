@@ -319,3 +319,26 @@ ieda tools canonical-merge-checklist
 2. 把 benchmark 扩成标准评测目录结构
 3. 为日志、case、脚本建立统一数据格式
 4. 逐步把“问答能力”升级成“可复用的工业调试工作流”
+
+## Formal Merge Gating Update
+
+当前 `candidate-quality-check -> review-finish-candidates -> promote-finish-candidates -> plan-pending-merge -> prepare/apply-formal-merge`
+已经形成了明确的自动分流规则。
+
+- `review-finish-candidates` 先产出 `review_recommendation`
+- `promote-finish-candidates` 再把它映射成 `next_step`
+- `plan-pending-merge` 只放行 `next_step = continue_to_pending_merge` 的 eligible 候选
+- `prepare-formal-merge` 只消费 eligible 候选
+- `apply-formal-merge` 会显式给出 `status / should_continue / deferred_candidates`
+
+当前支持的 `next_step` 包括：
+
+- `continue_to_pending_merge`
+- `run_manual_edit`
+- `stop_and_analyze`
+
+这意味着：
+
+- 还需要人工润色的候选，不会继续进入 formal merge assistant
+- 需要停下来分析的候选，也不会继续污染 patch / preview / report
+- 当没有 eligible 候选时，`apply-formal-merge --dry-run/--execute` 会明确提示当前无需推进 formal merge
