@@ -34,6 +34,7 @@ from .tools import (
     list_tools,
     apply_formal_merge,
     canonical_merge_preflight,
+    canonical_merge_checklist,
     canonical_merge_report,
     canonical_patch_helper,
     canonical_merge_preview_bundle,
@@ -143,6 +144,7 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_subparsers.add_parser("canonical-patch-helper", help="Generate canonical patch files and a manifest without modifying canonical dataset files")
     tools_subparsers.add_parser("canonical-merge-preview", help="Generate preview files that show what canonical merge results could look like, without modifying canonical data")
     tools_subparsers.add_parser("canonical-merge-report", help="Generate one overview bundle that links the canonical preflight, patch, and preview outputs")
+    tools_subparsers.add_parser("canonical-merge-checklist", help="Generate a final read-only checklist for whether manual canonical merge review can begin")
     tools_kickoff_real_parser = tools_subparsers.add_parser("kickoff-real-bench", help="Read a real-bench plan seed and create the first read-only bench-pack")
     tools_kickoff_real_parser.add_argument("seed", help="Path to a generated plan_seed.json")
     tools_kickoff_real_parser.add_argument("--execute", action="store_true", help="Actually execute the seeded read-only request")
@@ -379,6 +381,9 @@ def main() -> None:
             return
         if args.tools_command == "canonical-merge-report":
             _print_json(canonical_merge_report(paths.root))
+            return
+        if args.tools_command == "canonical-merge-checklist":
+            _print_json(canonical_merge_checklist(paths.root))
             return
         if args.tools_command == "kickoff-real-bench":
             render_first_run = args.render_first_run or args.render_all

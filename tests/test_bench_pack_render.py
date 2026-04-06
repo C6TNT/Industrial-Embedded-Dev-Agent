@@ -14,7 +14,7 @@ from industrial_embedded_dev_agent.bench_pack_render import (
 )
 from industrial_embedded_dev_agent.models import BenchmarkItem
 from industrial_embedded_dev_agent.runner import run_local_checks_with_options
-from industrial_embedded_dev_agent.tools import apply_formal_merge, canonical_merge_preflight, canonical_merge_preview_bundle, canonical_merge_report, canonical_patch_helper, finish_real_bench, kickoff_real_bench, plan_pending_merge, prepare_formal_merge_assistant, prepare_real_bench_package, promote_finish_candidates, review_finish_candidates
+from industrial_embedded_dev_agent.tools import apply_formal_merge, canonical_merge_checklist, canonical_merge_preflight, canonical_merge_preview_bundle, canonical_merge_report, canonical_patch_helper, finish_real_bench, kickoff_real_bench, plan_pending_merge, prepare_formal_merge_assistant, prepare_real_bench_package, promote_finish_candidates, review_finish_candidates
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -1146,5 +1146,60 @@ def test_canonical_merge_report_collects_preflight_patch_and_preview_outputs(tmp
         assert "## Patch Bundle" in text
         assert "## Preview Bundle" in text
         assert "## Recommended Review Order" in text
+    finally:
+        _reset_pending_root()
+
+
+def test_canonical_merge_checklist_reports_manual_review_readiness(tmp_path: Path) -> None:
+    session_id = "bench-am-17"
+    session_dir = REPO_ROOT / "reports" / "bench_packs" / "sessions" / session_id
+    if session_dir.exists():
+        shutil.rmtree(session_dir)
+
+    _reset_pending_root()
+    try:
+        prep = prepare_real_bench_package(
+            REPO_ROOT,
+            session_id=session_id,
+            label="Morning bench canonical merge checklist",
+            output_dir=tmp_path / "prep_bundle",
+        )
+
+        kickoff_real_bench(
+            REPO_ROOT,
+            Path(prep["plan_seed_path"]),
+            execute=False,
+            render_first_run=True,
+            render_session_review=True,
+        )
+        finish_real_bench(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        review_finish_candidates(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        promote_finish_candidates(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
+        apply_formal_merge(REPO_ROOT, dry_run=False)
+
+        result = canonical_merge_checklist(REPO_ROOT)
+        checklist_json = Path(result["canonical_merge_checklist_json"])
+        checklist_md = Path(result["canonical_merge_checklist_markdown"])
+        payload = json.loads(checklist_json.read_text(encoding="utf-8"))
+        text = checklist_md.read_text(encoding="utf-8")
+
+        assert checklist_json.exists()
+        assert checklist_md.exists()
+        assert result["ready_for_manual_canonical_merge_review"] is True
+        assert payload["ready_for_manual_canonical_merge_review"] is True
+        assert "## Checklist Items" in text
+        assert "## Next Steps" in text
     finally:
         _reset_pending_root()

@@ -1202,6 +1202,98 @@ def canonical_merge_report(root: Path) -> dict[str, object]:
     }
 
 
+def canonical_merge_checklist(root: Path) -> dict[str, object]:
+    assistant_dir = root / "data" / "pending" / "formal_merge_assistant"
+    checklist_dir = assistant_dir / "canonical_merge_checklist"
+    checklist_dir.mkdir(parents=True, exist_ok=True)
+
+    preflight = canonical_merge_preflight(root)
+    patch_bundle = canonical_patch_helper(root)
+    preview_bundle = canonical_merge_preview_bundle(root)
+    report = canonical_merge_report(root)
+
+    checklist_items = [
+        {
+            "name": "preflight_passed",
+            "checked": bool(preflight.get("passed", False)),
+            "details": preflight.get("canonical_merge_preflight_markdown", ""),
+        },
+        {
+            "name": "patch_bundle_ready",
+            "checked": Path(str(patch_bundle.get("canonical_patch_manifest_markdown", ""))).exists(),
+            "details": patch_bundle.get("canonical_patch_manifest_markdown", ""),
+        },
+        {
+            "name": "preview_bundle_ready",
+            "checked": Path(str(preview_bundle.get("canonical_merge_preview_manifest_markdown", ""))).exists(),
+            "details": preview_bundle.get("canonical_merge_preview_manifest_markdown", ""),
+        },
+        {
+            "name": "report_ready",
+            "checked": Path(str(report.get("canonical_merge_report_markdown", ""))).exists(),
+            "details": report.get("canonical_merge_report_markdown", ""),
+        },
+    ]
+
+    blockers = []
+    if not checklist_items[0]["checked"]:
+        blockers.append("Preflight has not passed yet. Review pending candidates, duplicate IDs, and staging readiness first.")
+    if not checklist_items[1]["checked"]:
+        blockers.append("Canonical patch bundle is missing.")
+    if not checklist_items[2]["checked"]:
+        blockers.append("Canonical merge preview bundle is missing.")
+    if not checklist_items[3]["checked"]:
+        blockers.append("Canonical merge report is missing.")
+
+    recommendation = (
+        "Manual canonical merge can be reviewed now."
+        if not blockers
+        else "Do not perform manual canonical merge yet. Resolve the blockers first."
+    )
+    next_steps = (
+        [
+            "Open canonical_merge_report.md first.",
+            "Then inspect canonical_patch_manifest.md and canonical_merge_preview_manifest.md.",
+            "If all content still looks correct after human review, prepare a curated manual merge commit.",
+        ]
+        if not blockers
+        else [
+            "Open canonical_merge_preflight.md and resolve any failed checks.",
+            "Regenerate patch, preview, and report outputs after fixing blockers.",
+            "Re-run canonical-merge-checklist before attempting any manual merge.",
+        ]
+    )
+
+    payload = {
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "assistant_dir": str(assistant_dir),
+        "ready_for_manual_canonical_merge_review": not blockers,
+        "checklist_items": checklist_items,
+        "blockers": blockers,
+        "recommendation": recommendation,
+        "next_steps": next_steps,
+        "key_outputs": {
+            "preflight_markdown": preflight.get("canonical_merge_preflight_markdown", ""),
+            "patch_manifest_markdown": patch_bundle.get("canonical_patch_manifest_markdown", ""),
+            "preview_manifest_markdown": preview_bundle.get("canonical_merge_preview_manifest_markdown", ""),
+            "report_markdown": report.get("canonical_merge_report_markdown", ""),
+        },
+    }
+
+    checklist_json = checklist_dir / "canonical_merge_checklist.json"
+    checklist_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    checklist_md = checklist_dir / "canonical_merge_checklist.md"
+    checklist_md.write_text(_render_canonical_merge_checklist_markdown(payload), encoding="utf-8")
+
+    return {
+        "output_dir": str(checklist_dir),
+        "canonical_merge_checklist_json": str(checklist_json),
+        "canonical_merge_checklist_markdown": str(checklist_md),
+        "ready_for_manual_canonical_merge_review": payload["ready_for_manual_canonical_merge_review"],
+    }
+
+
 def build_bench_pack(
     root: Path,
     request: str,
@@ -2368,6 +2460,36 @@ def _render_canonical_merge_report_markdown(payload: dict[str, object]) -> str:
             lines.append(f"- {note}")
     else:
         lines.append("- none")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _render_canonical_merge_checklist_markdown(payload: dict[str, object]) -> str:
+    lines = [
+        "# Canonical Merge Checklist",
+        "",
+        f"- generated_at: {payload.get('generated_at', '')}",
+        f"- assistant_dir: {payload.get('assistant_dir', '')}",
+        f"- ready_for_manual_canonical_merge_review: {payload.get('ready_for_manual_canonical_merge_review', False)}",
+        f"- recommendation: {payload.get('recommendation', '')}",
+        "",
+        "## Checklist Items",
+        "",
+    ]
+    for item in payload.get("checklist_items", []):
+        lines.append(
+            f"- {item.get('name', '')}: checked={item.get('checked', False)} details={item.get('details', '')}"
+        )
+    lines.extend(["", "## Blockers", ""])
+    blockers = payload.get("blockers", [])
+    if blockers:
+        for blocker in blockers:
+            lines.append(f"- {blocker}")
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Next Steps", ""])
+    for step in payload.get("next_steps", []):
+        lines.append(f"- {step}")
     lines.append("")
     return "\n".join(lines)
 
