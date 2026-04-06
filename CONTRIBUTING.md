@@ -141,8 +141,9 @@ ieda tools prep-real-bench --session-id <session-id> --label "<session label>"
 8. 需要整理正式并入 patch 包时，再执行 `ieda tools canonical-patch-helper`
 9. 需要预览 merge 后目录形态时，再执行 `ieda tools canonical-merge-preview`
 10. 需要把 preflight / patch / preview 汇总成单页总览时，再执行 `ieda tools canonical-merge-report`
+11. 需要判断“现在能不能开始人工 canonical merge 审阅”时，再执行 `ieda tools canonical-merge-checklist`
 
-当前这条链即使走到 `--execute`，也只会写入 staging 目录；`canonical-merge-preflight`、`canonical-patch-helper`、`canonical-merge-preview` 和 `canonical-merge-report` 也都不会直接修改 canonical 数据文件。
+当前这条链即使走到 `--execute`，也只会写入 staging 目录；`canonical-merge-preflight`、`canonical-patch-helper`、`canonical-merge-preview`、`canonical-merge-report` 和 `canonical-merge-checklist` 也都不会直接修改 canonical 数据文件。
 
 ### 日志样本
 

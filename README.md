@@ -224,6 +224,7 @@ ieda tools canonical-merge-preflight
 ieda tools canonical-patch-helper
 ieda tools canonical-merge-preview
 ieda tools canonical-merge-report
+ieda tools canonical-merge-checklist
 ```
 
 完整说明见：
@@ -238,6 +239,7 @@ ieda tools canonical-merge-report
 - `canonical-patch-helper` 只生成 canonical patch bundle
 - `canonical-merge-preview` 只生成 merge 后效果预览
 - `canonical-merge-report` 只汇总 preflight / patch / preview 结果
+- `canonical-merge-checklist` 只生成最终人工审阅清单
 - 不会直接修改 `data/materials/`、`data/materials/material_index_v1.md`、`data/benchmark/benchmark_v1.jsonl`
 
 ## 路线图
