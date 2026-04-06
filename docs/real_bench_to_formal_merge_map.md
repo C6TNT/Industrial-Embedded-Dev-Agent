@@ -304,6 +304,7 @@ If you only want the shortest mapping view, use this:
 
 ## Related Docs
 
+- `docs/real_bench_first_day_plan.md`
 - `docs/real_bench_quickstart.md`
 - `docs/real_bench_readiness_checklist.md`
 - `docs/real_bench_first_run_template.md`

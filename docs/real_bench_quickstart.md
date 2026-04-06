@@ -125,9 +125,10 @@ Those outputs become the first bridge from real bench evidence into the formal m
 
 After the first successful real-bench session, continue with:
 
-1. `docs/real_bench_to_formal_merge_map.md`
-2. `docs/formal_merge_quickstart.md`
-3. `docs/manual_canonical_merge_guide.md`
+1. `docs/real_bench_first_day_plan.md`
+2. `docs/real_bench_to_formal_merge_map.md`
+3. `docs/formal_merge_quickstart.md`
+4. `docs/manual_canonical_merge_guide.md`
 
 That gives you the shortest path from:
 
