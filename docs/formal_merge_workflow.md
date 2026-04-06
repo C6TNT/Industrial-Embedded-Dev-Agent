@@ -14,6 +14,8 @@
 - 再做 apply dry-run / staging execute
 - 最后在考虑 canonical merge 之前先跑 preflight
 - 预检通过后，再生成 canonical patch bundle
+- 再看 canonical merge preview
+- 最后收成 canonical merge report
 
 当前版本仍然不会直接改这些正式文件：
 
@@ -203,6 +205,47 @@ ieda tools canonical-patch-helper
 - 给 benchmark append、material index append、materials 候选文件一个更清晰的落地点
 - 让后续人工 canonical merge 不必再从 staging 或 dry-run 输出里手工翻找文件
 
+### 10. 生成 canonical merge preview
+
+```bash
+ieda tools canonical-merge-preview
+```
+
+这一步仍然不会写 canonical 文件，但会生成一套“merge 后效果预览”：
+
+- `data/pending/formal_merge_assistant/canonical_merge_preview/canonical_merge_preview_manifest.json`
+- `data/pending/formal_merge_assistant/canonical_merge_preview/canonical_merge_preview_manifest.md`
+- `data/pending/formal_merge_assistant/canonical_merge_preview/data/benchmark/benchmark_v1.preview.jsonl`
+- `data/pending/formal_merge_assistant/canonical_merge_preview/data/materials/material_index_v1.preview.md`
+- `data/pending/formal_merge_assistant/canonical_merge_preview/data/materials/materials_case_merge_candidates.preview.md`
+- `data/pending/formal_merge_assistant/canonical_merge_preview/recommended_commit_split.preview.md`
+
+这一步的用途是：
+
+- 直接预览 benchmark append 之后的整体文件形态
+- 直接预览 material index 追加后会长什么样
+- 让人工审阅不只看 patch，还能看“合并后大概长什么样”
+
+### 11. 生成 canonical merge report
+
+```bash
+ieda tools canonical-merge-report
+```
+
+这一步会把 `preflight / patch / preview` 三层结果收成单个总览：
+
+- `data/pending/formal_merge_assistant/canonical_merge_report/canonical_merge_report.json`
+- `data/pending/formal_merge_assistant/canonical_merge_report/canonical_merge_report.md`
+
+它当前会汇总：
+
+- preflight 是否通过
+- canonical patch bundle 的关键文件
+- canonical merge preview 的关键文件
+- 推荐人工审阅顺序
+
+这一步依然不会改 canonical 数据，它只是把 formal merge 前最后几层审阅结果收成一页。
+
 ---
 
 ## 推荐人工审阅顺序
@@ -217,6 +260,8 @@ ieda tools canonical-patch-helper
 6. `data/pending/formal_merge_assistant/staging/staging_summary.json`
 7. `data/pending/formal_merge_assistant/canonical_merge_preflight.md`
 8. `data/pending/formal_merge_assistant/canonical_patch_bundle/canonical_patch_manifest.md`
+9. `data/pending/formal_merge_assistant/canonical_merge_preview/canonical_merge_preview_manifest.md`
+10. `data/pending/formal_merge_assistant/canonical_merge_report/canonical_merge_report.md`
 
 如果要进一步做实际并入，建议再分别查看：
 
@@ -239,6 +284,8 @@ ieda tools canonical-patch-helper
 - `--execute` 也只会写到 `data/pending/formal_merge_assistant/staging/`
 - `canonical-merge-preflight` 只做只读预检
 - `canonical-patch-helper` 只生成 patch bundle，不会写 canonical 数据
+- `canonical-merge-preview` 只生成 merge 效果预览，不会写 canonical 数据
+- `canonical-merge-report` 只做汇总，不会写 canonical 数据
 
 也就是说，当前工具会尽可能把“正式并入前的准备工作”做完，但最后的 canonical 数据修改仍然保留给人工确认。
 
@@ -277,7 +324,7 @@ ieda tools canonical-patch-helper
 
 如果后面要继续推进，最自然的方向是：
 
-1. 在人工确认过 staging、preflight 和 canonical patch bundle 之后，再决定是否真的写 canonical 数据
+1. 在人工确认过 staging、preflight、canonical patch bundle、preview 和 report 之后，再决定是否真的写 canonical 数据
 2. 继续保持 benchmark 变更和 materials 变更分 commit 审阅
 
 这样既能提高 formal merge 的自动化程度，又不会过早突破当前项目的数据安全边界。
