@@ -2456,6 +2456,26 @@ def _sort_candidates_by_quality_score(candidates: list[dict[str, object]]) -> li
     )
 
 
+def _build_top_review_candidates(
+    case_candidates: list[dict[str, object]],
+    log_candidates: list[dict[str, object]],
+    benchmark_candidates: list[dict[str, object]],
+    deferred_candidates: list[dict[str, object]],
+    *,
+    limit: int = 5,
+) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    for candidate in case_candidates:
+        items.append({**candidate, "review_bucket": "eligible"})
+    for candidate in log_candidates:
+        items.append({**candidate, "review_bucket": "eligible"})
+    for candidate in benchmark_candidates:
+        items.append({**candidate, "review_bucket": "eligible"})
+    for candidate in deferred_candidates:
+        items.append({**candidate, "review_bucket": "deferred"})
+    return _sort_candidates_by_quality_score(items)[:limit]
+
+
 def _resolve_merge_plan_sources(entries: object) -> list[Path]:
     if not isinstance(entries, list):
         return []
@@ -2611,6 +2631,12 @@ def _render_candidate_quality_check_markdown(payload: dict[str, object]) -> str:
 
 
 def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
+    top_review_items = _build_top_review_candidates(
+        plan_payload.get("case_candidates", []),
+        plan_payload.get("log_candidates", []),
+        plan_payload.get("benchmark_candidates", []),
+        plan_payload.get("deferred_candidates", []),
+    )
     lines = [
         "# Pending Merge Plan",
         "",
@@ -2620,9 +2646,26 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
         f"- eligible_benchmark_candidates: {plan_payload.get('counts', {}).get('eligible_benchmark_candidates', 0)}",
         f"- deferred_candidates: {plan_payload.get('counts', {}).get('deferred_candidates', 0)}",
         "",
-        "## Case Candidates",
+        "## Top Candidates To Review First",
         "",
     ]
+    if top_review_items:
+        for item in top_review_items:
+            lines.append(
+                f"- [{item.get('review_bucket', '')}] {item.get('source', '')} "
+                f"(quality_level={item.get('quality_level', '')}; "
+                f"quality_score={item.get('quality_score', 0)}; "
+                f"review_recommendation={item.get('review_recommendation', '')}; "
+                f"next_step={item.get('next_step', '')})"
+            )
+    else:
+        lines.append("- none")
+
+    lines.extend([
+        "",
+        "## Case Candidates",
+        "",
+    ])
     case_candidates = plan_payload.get("case_candidates", [])
     if case_candidates:
         for item in case_candidates:
@@ -2754,6 +2797,12 @@ def _render_formal_merge_assistant_markdown(
     counts = assistant_payload.get("counts", {})
     generated_files = assistant_payload.get("generated_files", {})
     formal_targets = assistant_payload.get("formal_targets", {})
+    top_review_items = _build_top_review_candidates(
+        merge_plan_payload.get("case_candidates", []),
+        merge_plan_payload.get("log_candidates", []),
+        merge_plan_payload.get("benchmark_candidates", []),
+        merge_plan_payload.get("deferred_candidates", []),
+    )
     lines = [
         "# Formal Merge Assistant",
         "",
@@ -2786,9 +2835,26 @@ def _render_formal_merge_assistant_markdown(
         "3. Review the benchmark append candidates before touching the canonical benchmark file.",
         "4. Update the formal material index in a separate commit from the pending promotion step.",
         "",
-        "## Merge Plan Snapshot",
+        "## Top Candidates To Review First",
         "",
     ]
+    if top_review_items:
+        for item in top_review_items:
+            lines.append(
+                f"- [{item.get('review_bucket', '')}] {item.get('source', '')} "
+                f"(quality_level={item.get('quality_level', '')}; "
+                f"quality_score={item.get('quality_score', 0)}; "
+                f"review_recommendation={item.get('review_recommendation', '')}; "
+                f"next_step={item.get('next_step', '')})"
+            )
+    else:
+        lines.append("- none")
+
+    lines.extend([
+        "",
+        "## Merge Plan Snapshot",
+        "",
+    ])
     for section_name in ("case_candidates", "log_candidates", "benchmark_candidates"):
         items = merge_plan_payload.get(section_name, [])
         lines.append(f"### {section_name}")
