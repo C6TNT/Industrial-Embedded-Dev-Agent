@@ -736,11 +736,9 @@ def prepare_formal_merge_assistant(root: Path) -> dict[str, object]:
     merge_plan = plan_pending_merge(root)
     merge_plan_payload = json.loads(Path(str(merge_plan["merge_plan_json"])).read_text(encoding="utf-8"))
 
-    case_files = sorted((pending_root / "cases").glob("*.md")) if (pending_root / "cases").exists() else []
-    log_files = sorted((pending_root / "logs").glob("*.json")) if (pending_root / "logs").exists() else []
-    benchmark_files = sorted(
-        [path for path in (pending_root / "benchmarks").glob("*.json") if path.name != "pending_benchmark_candidates.jsonl"]
-    ) if (pending_root / "benchmarks").exists() else []
+    case_files = _resolve_merge_plan_sources(merge_plan_payload.get("case_candidates", []))
+    log_files = _resolve_merge_plan_sources(merge_plan_payload.get("log_candidates", []))
+    benchmark_files = _resolve_merge_plan_sources(merge_plan_payload.get("benchmark_candidates", []))
 
     case_bundle_path = assistant_dir / "materials_case_merge_candidates.md"
     case_bundle_path.write_text(_render_case_merge_bundle(case_files), encoding="utf-8")
@@ -772,6 +770,7 @@ def prepare_formal_merge_assistant(root: Path) -> dict[str, object]:
             "benchmark_jsonl": "data/benchmark/benchmark_v1.jsonl",
         },
         "merge_plan_json": str(merge_plan["merge_plan_json"]),
+        "deferred_candidates": merge_plan_payload.get("deferred_candidates", []),
         "case_candidates": [
             {
                 "source": str(path),
@@ -806,6 +805,7 @@ def prepare_formal_merge_assistant(root: Path) -> dict[str, object]:
             "case_candidates": len(case_files),
             "log_candidates": len(log_files),
             "benchmark_candidates": len(benchmark_files),
+            "deferred_candidates": len(merge_plan_payload.get("deferred_candidates", [])),
         },
     }
 
@@ -2331,6 +2331,23 @@ def _load_promotion_records(promotion_records_dir: Path) -> dict[str, dict[str, 
         if session_id:
             records[session_id] = payload
     return records
+
+
+def _resolve_merge_plan_sources(entries: object) -> list[Path]:
+    if not isinstance(entries, list):
+        return []
+
+    resolved: list[Path] = []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        source = str(item.get("source", "")).strip()
+        if not source:
+            continue
+        path = Path(source)
+        if path.exists():
+            resolved.append(path)
+    return resolved
 
 
 def _render_finish_candidate_review_markdown(

@@ -864,10 +864,12 @@ def test_prepare_formal_merge_assistant_generates_draft_merge_bundle(tmp_path: P
         assert case_bundle.exists()
         assert benchmark_append.exists()
         assert material_index_patch.exists()
-        assert assistant_payload["counts"]["case_candidates"] >= 1
-        assert assistant_payload["counts"]["benchmark_candidates"] >= 1
+        assert assistant_payload["counts"]["case_candidates"] == 0
+        assert assistant_payload["counts"]["benchmark_candidates"] == 0
+        assert assistant_payload["counts"]["deferred_candidates"] >= 3
+        assert len(assistant_payload["deferred_candidates"]) >= 3
         assert "## Recommended Merge Order" in assistant_text
-        assert len(benchmark_lines) >= 1
+        assert benchmark_lines == []
     finally:
         _reset_pending_root()
 
