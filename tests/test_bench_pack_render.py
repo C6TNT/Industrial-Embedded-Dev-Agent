@@ -621,10 +621,12 @@ def test_review_finish_candidates_generates_review_summary(tmp_path: Path) -> No
     assert review_md.exists()
     assert review_payload["session_id"] == session_id
     assert review_payload["quality_check_present"] is True
+    assert review_payload["review_recommendation"] == "edit_before_promote"
     assert "## Reviewer Checklist" in review_text
     assert "suggested_tag" in review_text
     assert "## Candidate Quality Check" in review_text
     assert "quality_summary_path" in review_text
+    assert "review_recommendation" in review_text
 
 
 def test_candidate_quality_check_generates_quality_summary(tmp_path: Path) -> None:

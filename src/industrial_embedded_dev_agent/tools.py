@@ -430,6 +430,7 @@ def review_finish_candidates(
         "quality_warnings": quality_payload.get("warnings", []),
         "quality_summary_path": str(quality_json_path) if quality_json_path.exists() else "",
     }
+    review_payload["review_recommendation"] = _review_recommendation(review_payload)
 
     review_json_path = review_dir / "review_summary.json"
     review_json_path.write_text(json.dumps(review_payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -2206,6 +2207,25 @@ def _evaluate_benchmark_candidate(path: Path, payload: dict[str, object]) -> dic
     }
 
 
+def _review_recommendation(review_payload: dict[str, object]) -> str:
+    has_all_candidates = bool(
+        review_payload.get("has_case_candidate")
+        and review_payload.get("has_log_candidate")
+        and review_payload.get("has_benchmark_candidate")
+    )
+    quality_present = bool(review_payload.get("quality_check_present"))
+    quality_passed = bool(review_payload.get("quality_overall_passed"))
+    quality_warnings = review_payload.get("quality_warnings", [])
+
+    if not has_all_candidates:
+        return "hold_for_manual_analysis"
+    if quality_present and quality_passed:
+        return "promote_now"
+    if quality_present and quality_warnings:
+        return "edit_before_promote"
+    return "hold_for_manual_analysis"
+
+
 def _render_finish_candidate_review_markdown(
     review_payload: dict[str, object],
     *,
@@ -2225,6 +2245,7 @@ def _render_finish_candidate_review_markdown(
         f"- suggested_tag: {review_payload.get('suggested_tag', '')}",
         f"- tool_id: {review_payload.get('tool_id', '')}",
         f"- risk_level: {review_payload.get('risk_level', '')}",
+        f"- review_recommendation: {review_payload.get('review_recommendation', '')}",
         "",
         "## Candidate Presence",
         "",
@@ -2255,6 +2276,7 @@ def _render_finish_candidate_review_markdown(
         "- Does the suggested tag match the actual bench evidence?",
         "- Is the benchmark question phrased clearly enough for future regression use?",
         "- Should this candidate stay as a draft, be edited, or be promoted into the formal dataset?",
+        f"- Current machine recommendation: {review_payload.get('review_recommendation', '')}",
         "",
     ]
     if quality_warnings:
