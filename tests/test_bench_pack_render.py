@@ -705,6 +705,11 @@ def test_promote_finish_candidates_copies_into_pending_area(tmp_path: Path) -> N
             session_id=session_id,
             prep_dir=Path(prep["output_dir"]),
         )
+        candidate_quality_check(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
         review_finish_candidates(
             REPO_ROOT,
             session_id=session_id,
@@ -730,6 +735,11 @@ def test_promote_finish_candidates_copies_into_pending_area(tmp_path: Path) -> N
         assert pending_jsonl.exists()
         assert len(pending_lines) == 1
         assert record_payload["session_id"] == session_id
+        assert record_payload["review_recommendation"] == "edit_before_promote"
+        assert record_payload["soft_blocked"] is True
+        assert "edit_before_promote" in record_payload["promotion_warning"]
+        assert result["review_recommendation"] == "edit_before_promote"
+        assert result["soft_blocked"] is True
     finally:
         _reset_pending_root()
 

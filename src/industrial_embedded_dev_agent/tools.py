@@ -523,10 +523,25 @@ def promote_finish_candidates(
     resolved_prep_dir = prep_dir or (root / "reports" / "real_bench_prep" / session_id)
     finish_dir = resolved_prep_dir / "finish_outputs"
     candidate_dir = finish_dir / "candidate_exports"
+    review_summary_path = finish_dir / "candidate_review" / "review_summary.json"
 
     case_path = candidate_dir / "case_candidate.md"
     log_path = candidate_dir / "log_candidate.json"
     benchmark_path = candidate_dir / "benchmark_candidate.json"
+    review_payload = json.loads(review_summary_path.read_text(encoding="utf-8")) if review_summary_path.exists() else {}
+    review_recommendation = str(review_payload.get("review_recommendation", "")).strip()
+    soft_blocked = review_recommendation in {"edit_before_promote", "hold_for_manual_analysis"}
+    promotion_warning = ""
+    if review_recommendation == "hold_for_manual_analysis":
+        promotion_warning = (
+            "Promotion proceeded even though review_recommendation=hold_for_manual_analysis. "
+            "Manual analysis is strongly recommended before any formal merge."
+        )
+    elif review_recommendation == "edit_before_promote":
+        promotion_warning = (
+            "Promotion proceeded even though review_recommendation=edit_before_promote. "
+            "Refine the candidate drafts before formal merge."
+        )
 
     pending_root = root / "data" / "pending"
     pending_cases_dir = pending_root / "cases"
@@ -566,6 +581,10 @@ def promote_finish_candidates(
         "session_id": session_id,
         "prep_dir": str(resolved_prep_dir),
         "candidate_dir": str(candidate_dir),
+        "review_summary_path": str(review_summary_path) if review_summary_path.exists() else "",
+        "review_recommendation": review_recommendation,
+        "soft_blocked": soft_blocked,
+        "promotion_warning": promotion_warning,
         "promoted_case_path": str(promoted_case_path) if case_path.exists() else "",
         "promoted_log_path": str(promoted_log_path) if log_path.exists() else "",
         "promoted_benchmark_path": str(promoted_benchmark_path) if benchmark_path.exists() else "",
@@ -579,6 +598,9 @@ def promote_finish_candidates(
         "pending_root": str(pending_root),
         "files": copied_files,
         "promotion_record": str(promotion_record_path),
+        "review_recommendation": review_recommendation,
+        "soft_blocked": soft_blocked,
+        "promotion_warning": promotion_warning,
     }
 
 
