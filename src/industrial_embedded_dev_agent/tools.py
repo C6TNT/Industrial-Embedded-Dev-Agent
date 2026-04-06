@@ -1045,6 +1045,96 @@ def canonical_patch_helper(root: Path) -> dict[str, object]:
     }
 
 
+def canonical_merge_preview_bundle(root: Path) -> dict[str, object]:
+    assistant_dir = root / "data" / "pending" / "formal_merge_assistant"
+    canonical_patch_helper(root)
+
+    patch_dir = assistant_dir / "canonical_patch_bundle"
+    preview_dir = assistant_dir / "canonical_merge_preview"
+    preview_dir.mkdir(parents=True, exist_ok=True)
+
+    benchmark_target = root / "data" / "benchmark" / "benchmark_v1.jsonl"
+    material_index_target = root / "data" / "materials" / "material_index_v1.md"
+    benchmark_patch = patch_dir / "data" / "benchmark" / "benchmark_v1.append.jsonl"
+    material_index_patch = patch_dir / "data" / "materials" / "material_index_v1.append.md"
+    materials_case_candidates = patch_dir / "data" / "materials" / "materials_case_merge_candidates.md"
+    commit_split_src = patch_dir / "recommended_commit_split.md"
+
+    preview_materials_dir = preview_dir / "data" / "materials"
+    preview_benchmark_dir = preview_dir / "data" / "benchmark"
+    preview_materials_dir.mkdir(parents=True, exist_ok=True)
+    preview_benchmark_dir.mkdir(parents=True, exist_ok=True)
+
+    benchmark_preview_path = preview_benchmark_dir / "benchmark_v1.preview.jsonl"
+    benchmark_existing = benchmark_target.read_text(encoding="utf-8").rstrip()
+    benchmark_append = benchmark_patch.read_text(encoding="utf-8").strip() if benchmark_patch.exists() else ""
+    benchmark_preview_text = benchmark_existing
+    if benchmark_append:
+        benchmark_preview_text = f"{benchmark_existing}\n{benchmark_append}".strip() + "\n"
+    elif benchmark_preview_text:
+        benchmark_preview_text += "\n"
+    benchmark_preview_path.write_text(benchmark_preview_text, encoding="utf-8")
+
+    material_index_preview_path = preview_materials_dir / "material_index_v1.preview.md"
+    material_index_existing = material_index_target.read_text(encoding="utf-8").rstrip()
+    append_lines = []
+    if material_index_patch.exists():
+        for line in material_index_patch.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- "):
+                append_lines.append(stripped)
+    material_index_preview_text = material_index_existing
+    if append_lines:
+        material_index_preview_text = material_index_preview_text + "\n\n## Pending Preview Entries\n\n" + "\n".join(append_lines) + "\n"
+    elif material_index_preview_text:
+        material_index_preview_text += "\n"
+    material_index_preview_path.write_text(material_index_preview_text, encoding="utf-8")
+
+    materials_case_preview_path = preview_materials_dir / "materials_case_merge_candidates.preview.md"
+    if materials_case_candidates.exists():
+        shutil.copyfile(materials_case_candidates, materials_case_preview_path)
+    else:
+        materials_case_preview_path.write_text("# Pending Case Merge Candidates\n\n- none\n", encoding="utf-8")
+
+    commit_split_preview_path = preview_dir / "recommended_commit_split.preview.md"
+    if commit_split_src.exists():
+        shutil.copyfile(commit_split_src, commit_split_preview_path)
+    else:
+        commit_split_preview_path.write_text("# Recommended Commit Split\n\n- none\n", encoding="utf-8")
+
+    preview_manifest = {
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "assistant_dir": str(assistant_dir),
+        "preview_root": str(preview_dir),
+        "preview_files": {
+            "benchmark_preview": str(benchmark_preview_path),
+            "material_index_preview": str(material_index_preview_path),
+            "materials_case_preview": str(materials_case_preview_path),
+            "recommended_commit_split_preview": str(commit_split_preview_path),
+        },
+        "notes": [
+            "These files preview canonical merge results without modifying canonical data.",
+            "Preview files may still need human curation before any real canonical merge.",
+        ],
+    }
+
+    preview_manifest_json = preview_dir / "canonical_merge_preview_manifest.json"
+    preview_manifest_json.write_text(json.dumps(preview_manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    preview_manifest_md = preview_dir / "canonical_merge_preview_manifest.md"
+    preview_manifest_md.write_text(_render_canonical_merge_preview_manifest_markdown(preview_manifest), encoding="utf-8")
+
+    return {
+        "output_dir": str(preview_dir),
+        "canonical_merge_preview_manifest_json": str(preview_manifest_json),
+        "canonical_merge_preview_manifest_markdown": str(preview_manifest_md),
+        "benchmark_preview": str(benchmark_preview_path),
+        "material_index_preview": str(material_index_preview_path),
+        "materials_case_preview": str(materials_case_preview_path),
+        "recommended_commit_split_preview": str(commit_split_preview_path),
+    }
+
+
 def build_bench_pack(
     root: Path,
     request: str,
@@ -2114,6 +2204,35 @@ def _render_canonical_patch_manifest_markdown(manifest: dict[str, object]) -> st
         f"- material_index_append_patch: {patch_files.get('material_index_append_patch', '')}",
         f"- materials_case_candidates: {patch_files.get('materials_case_candidates', '')}",
         f"- recommended_commit_split: {patch_files.get('recommended_commit_split', '')}",
+        "",
+        "## Notes",
+        "",
+    ]
+    if notes:
+        for note in notes:
+            lines.append(f"- {note}")
+    else:
+        lines.append("- none")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _render_canonical_merge_preview_manifest_markdown(manifest: dict[str, object]) -> str:
+    preview_files = manifest.get("preview_files", {})
+    notes = manifest.get("notes", [])
+    lines = [
+        "# Canonical Merge Preview Manifest",
+        "",
+        f"- generated_at: {manifest.get('generated_at', '')}",
+        f"- assistant_dir: {manifest.get('assistant_dir', '')}",
+        f"- preview_root: {manifest.get('preview_root', '')}",
+        "",
+        "## Preview Files",
+        "",
+        f"- benchmark_preview: {preview_files.get('benchmark_preview', '')}",
+        f"- material_index_preview: {preview_files.get('material_index_preview', '')}",
+        f"- materials_case_preview: {preview_files.get('materials_case_preview', '')}",
+        f"- recommended_commit_split_preview: {preview_files.get('recommended_commit_split_preview', '')}",
         "",
         "## Notes",
         "",
