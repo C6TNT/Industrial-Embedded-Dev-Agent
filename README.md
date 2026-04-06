@@ -229,6 +229,7 @@ ieda tools canonical-merge-checklist
 
 完整说明见：
 
+- `docs/real_bench_quickstart.md`
 - `docs/formal_merge_workflow.md`
 - `docs/formal_merge_quickstart.md`
 - `docs/manual_canonical_merge_guide.md`

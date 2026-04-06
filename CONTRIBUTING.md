@@ -147,6 +147,7 @@ ieda tools prep-real-bench --session-id <session-id> --label "<session label>"
 
 如果 checklist 已经通过、准备进入真正的人审并入阶段，再看：
 
+- `docs/real_bench_quickstart.md`
 - `docs/formal_merge_quickstart.md`
 - `docs/manual_canonical_merge_guide.md`
 - `docs/real_bench_to_formal_merge_map.md`
