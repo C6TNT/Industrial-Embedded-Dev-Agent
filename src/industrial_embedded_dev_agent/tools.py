@@ -657,6 +657,7 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
             "action": "review_and_copy",
             "review_recommendation": review_info.get("review_recommendation", ""),
             "quality_level": review_info.get("quality_level", ""),
+            "quality_score": review_info.get("quality_score", 0),
             "next_step": next_step,
         }
         if next_step == "continue_to_pending_merge":
@@ -681,6 +682,7 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
             "action": "review_and_reclassify",
             "review_recommendation": review_info.get("review_recommendation", ""),
             "quality_level": review_info.get("quality_level", ""),
+            "quality_score": review_info.get("quality_score", 0),
             "next_step": next_step,
         }
         if next_step == "continue_to_pending_merge":
@@ -705,6 +707,7 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
             "action": "review_then_append",
             "review_recommendation": review_info.get("review_recommendation", ""),
             "quality_level": review_info.get("quality_level", ""),
+            "quality_score": review_info.get("quality_score", 0),
             "next_step": next_step,
         }
         if next_step == "continue_to_pending_merge":
@@ -2610,6 +2613,7 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
             lines.append(
                 f"- {item.get('source', '')} -> {item.get('suggested_target', '')} "
                 f"({item.get('action', '')}; quality_level={item.get('quality_level', '')}; "
+                f"quality_score={item.get('quality_score', 0)}; "
                 f"review_recommendation={item.get('review_recommendation', '')})"
             )
     else:
@@ -2622,6 +2626,7 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
             lines.append(
                 f"- {item.get('source', '')} -> {item.get('suggested_target', '')} "
                 f"({item.get('action', '')}; quality_level={item.get('quality_level', '')}; "
+                f"quality_score={item.get('quality_score', 0)}; "
                 f"review_recommendation={item.get('review_recommendation', '')})"
             )
     else:
@@ -2634,6 +2639,7 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
             lines.append(
                 f"- {item.get('source', '')} -> {item.get('suggested_target', '')} "
                 f"({item.get('action', '')}; quality_level={item.get('quality_level', '')}; "
+                f"quality_score={item.get('quality_score', 0)}; "
                 f"review_recommendation={item.get('review_recommendation', '')})"
             )
     else:
@@ -2646,6 +2652,7 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
             lines.append(
                 f"- [{item.get('candidate_type', '')}] {item.get('source', '')} "
                 f"({item.get('deferred_reason', '')}; quality_level={item.get('quality_level', '')}; "
+                f"quality_score={item.get('quality_score', 0)}; "
                 f"review_recommendation={item.get('review_recommendation', '')}; next_step={item.get('next_step', '')})"
             )
     else:
@@ -2774,6 +2781,7 @@ def _render_formal_merge_assistant_markdown(
                 lines.append(
                     f"- {item.get('source', '')} -> {item.get('suggested_target', '')} "
                     f"({item.get('action', '')}; quality_level={item.get('quality_level', '')}; "
+                    f"quality_score={item.get('quality_score', 0)}; "
                     f"review_recommendation={item.get('review_recommendation', '')})"
                 )
         else:
@@ -2787,6 +2795,7 @@ def _render_formal_merge_assistant_markdown(
             lines.append(
                 f"- [{item.get('candidate_type', '')}] {item.get('source', '')} "
                 f"(quality_level={item.get('quality_level', '')}; "
+                f"quality_score={item.get('quality_score', 0)}; "
                 f"review_recommendation={item.get('review_recommendation', '')}; "
                 f"next_step={item.get('next_step', '')})"
             )
