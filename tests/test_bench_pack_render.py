@@ -737,9 +737,11 @@ def test_promote_finish_candidates_copies_into_pending_area(tmp_path: Path) -> N
         assert record_payload["session_id"] == session_id
         assert record_payload["review_recommendation"] == "edit_before_promote"
         assert record_payload["soft_blocked"] is True
+        assert record_payload["next_step"] == "run_manual_edit"
         assert "edit_before_promote" in record_payload["promotion_warning"]
         assert result["review_recommendation"] == "edit_before_promote"
         assert result["soft_blocked"] is True
+        assert result["next_step"] == "run_manual_edit"
     finally:
         _reset_pending_root()
 

@@ -531,6 +531,11 @@ def promote_finish_candidates(
     review_payload = json.loads(review_summary_path.read_text(encoding="utf-8")) if review_summary_path.exists() else {}
     review_recommendation = str(review_payload.get("review_recommendation", "")).strip()
     soft_blocked = review_recommendation in {"edit_before_promote", "hold_for_manual_analysis"}
+    next_step = "continue_to_pending_merge"
+    if review_recommendation == "hold_for_manual_analysis":
+        next_step = "stop_and_analyze"
+    elif review_recommendation == "edit_before_promote":
+        next_step = "run_manual_edit"
     promotion_warning = ""
     if review_recommendation == "hold_for_manual_analysis":
         promotion_warning = (
@@ -584,6 +589,7 @@ def promote_finish_candidates(
         "review_summary_path": str(review_summary_path) if review_summary_path.exists() else "",
         "review_recommendation": review_recommendation,
         "soft_blocked": soft_blocked,
+        "next_step": next_step,
         "promotion_warning": promotion_warning,
         "promoted_case_path": str(promoted_case_path) if case_path.exists() else "",
         "promoted_log_path": str(promoted_log_path) if log_path.exists() else "",
@@ -600,6 +606,7 @@ def promote_finish_candidates(
         "promotion_record": str(promotion_record_path),
         "review_recommendation": review_recommendation,
         "soft_blocked": soft_blocked,
+        "next_step": next_step,
         "promotion_warning": promotion_warning,
     }
 
