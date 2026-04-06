@@ -616,6 +616,7 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
     cases_dir = pending_root / "cases"
     logs_dir = pending_root / "logs"
     benchmarks_dir = pending_root / "benchmarks"
+    promotion_records_dir = pending_root / "promotion_records"
     plan_dir = pending_root / "merge_plan"
     plan_dir.mkdir(parents=True, exist_ok=True)
 
@@ -624,33 +625,94 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
     benchmark_files = sorted(
         [path for path in benchmarks_dir.glob("*.json") if path.name != "pending_benchmark_candidates.jsonl"]
     ) if benchmarks_dir.exists() else []
+    promotion_records = _load_promotion_records(promotion_records_dir)
+
+    case_candidates: list[dict[str, object]] = []
+    log_candidates: list[dict[str, object]] = []
+    benchmark_candidates: list[dict[str, object]] = []
+    deferred_candidates: list[dict[str, object]] = []
+
+    for path in case_files:
+        session_id = path.name.removesuffix("_case_candidate.md")
+        review_info = promotion_records.get(session_id, {})
+        next_step = str(review_info.get("next_step", "continue_to_pending_merge"))
+        candidate = {
+            "session_id": session_id,
+            "source": str(path),
+            "suggested_target": "data/materials/",
+            "action": "review_and_copy",
+            "review_recommendation": review_info.get("review_recommendation", ""),
+            "next_step": next_step,
+        }
+        if next_step == "continue_to_pending_merge":
+            case_candidates.append(candidate)
+        else:
+            deferred_candidates.append(
+                {
+                    **candidate,
+                    "candidate_type": "case",
+                    "deferred_reason": f"Deferred because next_step={next_step}.",
+                }
+            )
+
+    for path in log_files:
+        session_id = path.name.removesuffix("_log_candidate.json")
+        review_info = promotion_records.get(session_id, {})
+        next_step = str(review_info.get("next_step", "continue_to_pending_merge"))
+        candidate = {
+            "session_id": session_id,
+            "source": str(path),
+            "suggested_target": "data/materials/ or future log corpus",
+            "action": "review_and_reclassify",
+            "review_recommendation": review_info.get("review_recommendation", ""),
+            "next_step": next_step,
+        }
+        if next_step == "continue_to_pending_merge":
+            log_candidates.append(candidate)
+        else:
+            deferred_candidates.append(
+                {
+                    **candidate,
+                    "candidate_type": "log",
+                    "deferred_reason": f"Deferred because next_step={next_step}.",
+                }
+            )
+
+    for path in benchmark_files:
+        session_id = path.name.removesuffix("_benchmark_candidate.json")
+        review_info = promotion_records.get(session_id, {})
+        next_step = str(review_info.get("next_step", "continue_to_pending_merge"))
+        candidate = {
+            "session_id": session_id,
+            "source": str(path),
+            "suggested_target": "data/benchmark/benchmark_v1.jsonl",
+            "action": "review_then_append",
+            "review_recommendation": review_info.get("review_recommendation", ""),
+            "next_step": next_step,
+        }
+        if next_step == "continue_to_pending_merge":
+            benchmark_candidates.append(candidate)
+        else:
+            deferred_candidates.append(
+                {
+                    **candidate,
+                    "candidate_type": "benchmark",
+                    "deferred_reason": f"Deferred because next_step={next_step}.",
+                }
+            )
 
     plan_payload = {
         "pending_root": str(pending_root),
-        "case_candidates": [
-            {
-                "source": str(path),
-                "suggested_target": "data/materials/",
-                "action": "review_and_copy",
-            }
-            for path in case_files
-        ],
-        "log_candidates": [
-            {
-                "source": str(path),
-                "suggested_target": "data/materials/ or future log corpus",
-                "action": "review_and_reclassify",
-            }
-            for path in log_files
-        ],
-        "benchmark_candidates": [
-            {
-                "source": str(path),
-                "suggested_target": "data/benchmark/benchmark_v1.jsonl",
-                "action": "review_then_append",
-            }
-            for path in benchmark_files
-        ],
+        "case_candidates": case_candidates,
+        "log_candidates": log_candidates,
+        "benchmark_candidates": benchmark_candidates,
+        "deferred_candidates": deferred_candidates,
+        "counts": {
+            "eligible_case_candidates": len(case_candidates),
+            "eligible_log_candidates": len(log_candidates),
+            "eligible_benchmark_candidates": len(benchmark_candidates),
+            "deferred_candidates": len(deferred_candidates),
+        },
     }
 
     plan_json_path = plan_dir / "merge_plan.json"
@@ -2255,6 +2317,22 @@ def _review_recommendation(review_payload: dict[str, object]) -> str:
     return "hold_for_manual_analysis"
 
 
+def _load_promotion_records(promotion_records_dir: Path) -> dict[str, dict[str, object]]:
+    if not promotion_records_dir.exists():
+        return {}
+
+    records: dict[str, dict[str, object]] = {}
+    for path in sorted(promotion_records_dir.glob("*_promotion_record.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        session_id = str(payload.get("session_id", "")).strip()
+        if session_id:
+            records[session_id] = payload
+    return records
+
+
 def _render_finish_candidate_review_markdown(
     review_payload: dict[str, object],
     *,
@@ -2363,6 +2441,10 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
         "# Pending Merge Plan",
         "",
         f"- pending_root: {plan_payload.get('pending_root', '')}",
+        f"- eligible_case_candidates: {plan_payload.get('counts', {}).get('eligible_case_candidates', 0)}",
+        f"- eligible_log_candidates: {plan_payload.get('counts', {}).get('eligible_log_candidates', 0)}",
+        f"- eligible_benchmark_candidates: {plan_payload.get('counts', {}).get('eligible_benchmark_candidates', 0)}",
+        f"- deferred_candidates: {plan_payload.get('counts', {}).get('deferred_candidates', 0)}",
         "",
         "## Case Candidates",
         "",
@@ -2390,6 +2472,17 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
     else:
         lines.append("- none")
 
+    lines.extend(["", "## Deferred Candidates", ""])
+    deferred_candidates = plan_payload.get("deferred_candidates", [])
+    if deferred_candidates:
+        for item in deferred_candidates:
+            lines.append(
+                f"- [{item.get('candidate_type', '')}] {item.get('source', '')} "
+                f"({item.get('deferred_reason', '')})"
+            )
+    else:
+        lines.append("- none")
+
     lines.extend(
         [
             "",
@@ -2397,6 +2490,7 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
             "",
             "- Review pending case candidates before copying them into formal materials.",
             "- Review pending benchmark candidates before appending them into the canonical benchmark file.",
+            "- Deferred candidates should not move forward until their next_step is cleared.",
             "- Keep promotion and formal merge as two separate commits whenever possible.",
             "",
         ]

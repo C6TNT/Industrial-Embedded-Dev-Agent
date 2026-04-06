@@ -794,8 +794,15 @@ def test_plan_pending_merge_generates_merge_plan(tmp_path: Path) -> None:
         assert plan_dir.exists()
         assert plan_json.exists()
         assert plan_md.exists()
-        assert len(plan_payload["case_candidates"]) >= 1
-        assert len(plan_payload["benchmark_candidates"]) >= 1
+        assert len(plan_payload["case_candidates"]) == 0
+        assert len(plan_payload["benchmark_candidates"]) == 0
+        assert len(plan_payload["deferred_candidates"]) >= 3
+        assert plan_payload["counts"]["deferred_candidates"] >= 3
+        assert all(
+            item["next_step"] in {"run_manual_edit", "stop_and_analyze"}
+            for item in plan_payload["deferred_candidates"]
+        )
+        assert "## Deferred Candidates" in plan_text
         assert "## Merge Guidance" in plan_text
     finally:
         _reset_pending_root()
