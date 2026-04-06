@@ -145,6 +145,10 @@ ieda tools prep-real-bench --session-id <session-id> --label "<session label>"
 
 当前这条链即使走到 `--execute`，也只会写入 staging 目录；`canonical-merge-preflight`、`canonical-patch-helper`、`canonical-merge-preview`、`canonical-merge-report` 和 `canonical-merge-checklist` 也都不会直接修改 canonical 数据文件。
 
+如果 checklist 已经通过、准备进入真正的人审并入阶段，再看：
+
+- `docs/manual_canonical_merge_guide.md`
+
 ### 日志样本
 
 建议尽量满足：
