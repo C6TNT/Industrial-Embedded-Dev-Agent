@@ -623,11 +623,13 @@ def test_review_finish_candidates_generates_review_summary(tmp_path: Path) -> No
     assert review_payload["quality_check_present"] is True
     assert review_payload["quality_level"] == "weak"
     assert isinstance(review_payload["quality_score"], int)
+    assert review_payload["quality_warning_categories"] == ["weak_content"]
     assert review_payload["review_recommendation"] == "edit_before_promote"
     assert "## Reviewer Checklist" in review_text
     assert "suggested_tag" in review_text
     assert "## Candidate Quality Check" in review_text
     assert "quality_level: weak" in review_text
+    assert "quality_warning_categories: weak_content" in review_text
     assert "quality_summary_path" in review_text
     assert "review_recommendation" in review_text
 
@@ -677,19 +679,26 @@ def test_candidate_quality_check_generates_quality_summary(tmp_path: Path) -> No
     assert payload["quality_level"] == "weak"
     assert isinstance(payload["quality_score"], int)
     assert payload["quality_score"] < 100
+    assert payload["warning_categories"] == ["weak_content"]
+    assert payload["warning_details"][0]["category"] == "weak_content"
     assert payload["case_candidate"]["exists"] is True
     assert payload["case_candidate"]["quality_level"] == "good"
     assert payload["case_candidate"]["quality_score"] == 100
+    assert payload["case_candidate"]["warning_categories"] == []
     assert payload["log_candidate"]["exists"] is True
     assert payload["log_candidate"]["quality_level"] == "weak"
     assert payload["log_candidate"]["quality_score"] < 100
+    assert payload["log_candidate"]["warning_categories"] == ["weak_content"]
     assert payload["benchmark_candidate"]["exists"] is True
     assert payload["benchmark_candidate"]["quality_level"] == "good"
     assert payload["benchmark_candidate"]["quality_score"] == 100
     assert "## Warnings" in text
+    assert "## Warning Details" in text
     assert "## Benchmark Candidate" in text
     assert "quality_level: weak" in text
     assert "quality_score:" in text
+    assert "warning_categories: weak_content" in text
+    assert "[weak_content]" in text
 
 
 def test_promote_finish_candidates_copies_into_pending_area(tmp_path: Path) -> None:

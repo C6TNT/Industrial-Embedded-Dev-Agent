@@ -430,6 +430,7 @@ def review_finish_candidates(
         "quality_level": quality_payload.get("quality_level", ""),
         "quality_score": quality_payload.get("quality_score", 0),
         "quality_warnings": quality_payload.get("warnings", []),
+        "quality_warning_categories": quality_payload.get("warning_categories", []),
         "quality_summary_path": str(quality_json_path) if quality_json_path.exists() else "",
     }
     review_payload["review_recommendation"] = _review_recommendation(review_payload)
@@ -481,7 +482,13 @@ def candidate_quality_check(
     log_result = _evaluate_log_candidate(log_path, log_payload)
     benchmark_result = _evaluate_benchmark_candidate(benchmark_path, benchmark_payload)
 
-    warnings = [*case_result["warnings"], *log_result["warnings"], *benchmark_result["warnings"]]
+    warning_details = [
+        *case_result["warning_details"],
+        *log_result["warning_details"],
+        *benchmark_result["warning_details"],
+    ]
+    warnings = [detail["message"] for detail in warning_details]
+    warning_categories = _collect_warning_categories([case_result, log_result, benchmark_result])
     quality_level = _overall_quality_level([case_result, log_result, benchmark_result])
     quality_score = _overall_quality_score([case_result, log_result, benchmark_result])
     overall_passed = bool(case_result["passed"] and log_result["passed"] and benchmark_result["passed"])
@@ -505,6 +512,8 @@ def candidate_quality_check(
         "log_candidate": log_result,
         "benchmark_candidate": benchmark_result,
         "warnings": warnings,
+        "warning_details": warning_details,
+        "warning_categories": warning_categories,
         "next_action": next_action,
     }
 
@@ -2249,13 +2258,16 @@ def _candidate_issue_tag(parsed: dict[str, object], plan: dict[str, object]) -> 
 
 def _evaluate_case_candidate(path: Path, text: str) -> dict[str, object]:
     warnings: list[str] = []
+    warning_details: list[dict[str, str]] = []
     exists = path.exists()
     if not exists:
-        warnings.append("case candidate file is missing")
+        _append_warning(warnings, warning_details, "missing_file", "case candidate file is missing")
         return {
             "exists": False,
             "passed": False,
             "warnings": warnings,
+            "warning_details": warning_details,
+            "warning_categories": _warning_categories_from_details(warning_details),
             "length": 0,
             "quality_level": "blocked",
             "quality_score": 0,
@@ -2264,16 +2276,18 @@ def _evaluate_case_candidate(path: Path, text: str) -> dict[str, object]:
     normalized = text.strip()
     length = len(normalized)
     if length < 120:
-        warnings.append("case candidate content is very short")
+        _append_warning(warnings, warning_details, "weak_content", "case candidate content is very short")
     if "## Observed Summary" not in text:
-        warnings.append("case candidate is missing the observed summary section")
+        _append_warning(warnings, warning_details, "missing_fields", "case candidate is missing the observed summary section")
     if "## Suggested Next Step" not in text:
-        warnings.append("case candidate is missing the suggested next step section")
+        _append_warning(warnings, warning_details, "missing_fields", "case candidate is missing the suggested next step section")
 
     return {
         "exists": True,
         "passed": len(warnings) == 0,
         "warnings": warnings,
+        "warning_details": warning_details,
+        "warning_categories": _warning_categories_from_details(warning_details),
         "length": length,
         "quality_level": _quality_level(exists=True, warnings=warnings),
         "quality_score": _quality_score(exists=True, warnings=warnings),
@@ -2282,32 +2296,48 @@ def _evaluate_case_candidate(path: Path, text: str) -> dict[str, object]:
 
 def _evaluate_log_candidate(path: Path, payload: dict[str, object]) -> dict[str, object]:
     warnings: list[str] = []
+    warning_details: list[dict[str, str]] = []
     exists = path.exists()
     if not exists:
-        warnings.append("log candidate file is missing")
-        return {"exists": False, "passed": False, "warnings": warnings, "quality_level": "blocked", "quality_score": 0}
+        _append_warning(warnings, warning_details, "missing_file", "log candidate file is missing")
+        return {
+            "exists": False,
+            "passed": False,
+            "warnings": warnings,
+            "warning_details": warning_details,
+            "warning_categories": _warning_categories_from_details(warning_details),
+            "quality_level": "blocked",
+            "quality_score": 0,
+        }
 
     required_fields = ["session_id", "suggested_tag", "tool_id", "risk_level", "parsed_output"]
     missing_fields = [field for field in required_fields if not payload.get(field)]
     if missing_fields:
-        warnings.append(f"log candidate is missing required fields: {', '.join(missing_fields)}")
+        _append_warning(
+            warnings,
+            warning_details,
+            "missing_fields",
+            f"log candidate is missing required fields: {', '.join(missing_fields)}",
+        )
 
     suggested_tag = str(payload.get("suggested_tag", "")).strip()
     if not suggested_tag:
-        warnings.append("log candidate suggested_tag is empty")
+        _append_warning(warnings, warning_details, "missing_fields", "log candidate suggested_tag is empty")
     elif len(suggested_tag) < 4:
-        warnings.append("log candidate suggested_tag looks too weak")
+        _append_warning(warnings, warning_details, "review_noise", "log candidate suggested_tag looks too weak")
 
     parsed_output = payload.get("parsed_output", {})
     if not isinstance(parsed_output, dict) or not parsed_output:
-        warnings.append("log candidate parsed_output is empty")
+        _append_warning(warnings, warning_details, "missing_fields", "log candidate parsed_output is empty")
     elif not str(parsed_output.get("summary", "")).strip():
-        warnings.append("log candidate parsed_output.summary is empty")
+        _append_warning(warnings, warning_details, "weak_content", "log candidate parsed_output.summary is empty")
 
     return {
         "exists": True,
         "passed": len(warnings) == 0,
         "warnings": warnings,
+        "warning_details": warning_details,
+        "warning_categories": _warning_categories_from_details(warning_details),
         "required_fields_present": len(missing_fields) == 0,
         "quality_level": _quality_level(
             exists=True,
@@ -2324,10 +2354,19 @@ def _evaluate_log_candidate(path: Path, payload: dict[str, object]) -> dict[str,
 
 def _evaluate_benchmark_candidate(path: Path, payload: dict[str, object]) -> dict[str, object]:
     warnings: list[str] = []
+    warning_details: list[dict[str, str]] = []
     exists = path.exists()
     if not exists:
-        warnings.append("benchmark candidate file is missing")
-        return {"exists": False, "passed": False, "warnings": warnings, "quality_level": "blocked", "quality_score": 0}
+        _append_warning(warnings, warning_details, "missing_file", "benchmark candidate file is missing")
+        return {
+            "exists": False,
+            "passed": False,
+            "warnings": warnings,
+            "warning_details": warning_details,
+            "warning_categories": _warning_categories_from_details(warning_details),
+            "quality_level": "blocked",
+            "quality_score": 0,
+        }
 
     candidate_id = str(payload.get("id", "")).strip()
     item_type = str(payload.get("item_type", "")).strip()
@@ -2336,25 +2375,32 @@ def _evaluate_benchmark_candidate(path: Path, payload: dict[str, object]) -> dic
     must_include = payload.get("expected", {}).get("must_include", [])
 
     if not candidate_id:
-        warnings.append("benchmark candidate id is empty")
+        _append_warning(warnings, warning_details, "missing_fields", "benchmark candidate id is empty")
     elif not re.fullmatch(r"candidate-[a-z0-9][a-z0-9_-]*", candidate_id):
-        warnings.append("benchmark candidate id does not match the expected candidate-* style")
+        _append_warning(
+            warnings,
+            warning_details,
+            "review_noise",
+            "benchmark candidate id does not match the expected candidate-* style",
+        )
 
     if not item_type:
-        warnings.append("benchmark candidate item_type is empty")
+        _append_warning(warnings, warning_details, "missing_fields", "benchmark candidate item_type is empty")
     if not question:
-        warnings.append("benchmark candidate question is empty")
+        _append_warning(warnings, warning_details, "missing_fields", "benchmark candidate question is empty")
     elif len(question) < 12:
-        warnings.append("benchmark candidate question is too short")
+        _append_warning(warnings, warning_details, "weak_content", "benchmark candidate question is too short")
     if not isinstance(tags, list) or not tags:
-        warnings.append("benchmark candidate tags are empty")
+        _append_warning(warnings, warning_details, "missing_fields", "benchmark candidate tags are empty")
     if not isinstance(must_include, list) or not must_include:
-        warnings.append("benchmark candidate expected.must_include is empty")
+        _append_warning(warnings, warning_details, "missing_fields", "benchmark candidate expected.must_include is empty")
 
     return {
         "exists": True,
         "passed": len(warnings) == 0,
         "warnings": warnings,
+        "warning_details": warning_details,
+        "warning_categories": _warning_categories_from_details(warning_details),
         "candidate_id": candidate_id,
         "quality_level": _quality_level(
             exists=True,
@@ -2389,6 +2435,35 @@ def _review_recommendation(review_payload: dict[str, object]) -> str:
     if quality_level == "weak" or (quality_present and quality_warnings):
         return "edit_before_promote"
     return "hold_for_manual_analysis"
+
+
+def _append_warning(
+    warnings: list[str],
+    warning_details: list[dict[str, str]],
+    category: str,
+    message: str,
+) -> None:
+    warnings.append(message)
+    warning_details.append({"category": category, "message": message})
+
+
+def _warning_categories_from_details(warning_details: list[dict[str, str]]) -> list[str]:
+    categories: list[str] = []
+    for detail in warning_details:
+        category = str(detail.get("category", "")).strip()
+        if category and category not in categories:
+            categories.append(category)
+    return categories
+
+
+def _collect_warning_categories(results: list[dict[str, object]]) -> list[str]:
+    categories: list[str] = []
+    for result in results:
+        for category in result.get("warning_categories", []):
+            normalized = str(category).strip()
+            if normalized and normalized not in categories:
+                categories.append(normalized)
+    return categories
 
 
 def _load_promotion_records(promotion_records_dir: Path) -> dict[str, dict[str, object]]:
@@ -2545,6 +2620,7 @@ def _render_finish_candidate_review_markdown(
         f"- quality_overall_passed: {review_payload.get('quality_overall_passed', False)}",
         f"- quality_level: {review_payload.get('quality_level', '')}",
         f"- quality_score: {review_payload.get('quality_score', 0)}",
+        f"- quality_warning_categories: {', '.join(review_payload.get('quality_warning_categories', []))}",
         f"- quality_summary_path: {review_payload.get('quality_summary_path', '')}",
         "",
         "### Quality Warnings",
@@ -2610,6 +2686,7 @@ def _render_candidate_quality_check_markdown(payload: dict[str, object]) -> str:
         f"- overall_passed: {payload.get('overall_passed', False)}",
         f"- quality_level: {payload.get('quality_level', '')}",
         f"- quality_score: {payload.get('quality_score', 0)}",
+        f"- warning_categories: {', '.join(payload.get('warning_categories', []))}",
         f"- next_action: {payload.get('next_action', '')}",
         "",
         "## Case Candidate",
@@ -2643,6 +2720,13 @@ def _render_candidate_quality_check_markdown(payload: dict[str, object]) -> str:
     if warnings:
         for warning in warnings:
             lines.append(f"- {warning}")
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Warning Details", ""])
+    warning_details = payload.get("warning_details", [])
+    if warning_details:
+        for detail in warning_details:
+            lines.append(f"- [{detail.get('category', '')}] {detail.get('message', '')}")
     else:
         lines.append("- none")
     lines.append("")
