@@ -626,6 +626,7 @@ def test_review_finish_candidates_generates_review_summary(tmp_path: Path) -> No
     assert "## Reviewer Checklist" in review_text
     assert "suggested_tag" in review_text
     assert "## Candidate Quality Check" in review_text
+    assert "quality_level: weak" in review_text
     assert "quality_summary_path" in review_text
     assert "review_recommendation" in review_text
 
@@ -730,14 +731,17 @@ def test_promote_finish_candidates_copies_into_pending_area(tmp_path: Path) -> N
 
         pending_root = Path(result["pending_root"])
         record_path = Path(result["promotion_record"])
+        record_md = Path(result["promotion_record_markdown"])
         pending_jsonl = pending_root / "benchmarks" / "pending_benchmark_candidates.jsonl"
         record_payload = json.loads(record_path.read_text(encoding="utf-8"))
+        record_text = record_md.read_text(encoding="utf-8")
         pending_lines = pending_jsonl.read_text(encoding="utf-8").strip().splitlines()
 
         assert pending_root.exists()
         assert (pending_root / "cases" / f"{session_id}_case_candidate.md").exists()
         assert (pending_root / "logs" / f"{session_id}_log_candidate.json").exists()
         assert (pending_root / "benchmarks" / f"{session_id}_benchmark_candidate.json").exists()
+        assert record_md.exists()
         assert pending_jsonl.exists()
         assert len(pending_lines) == 1
         assert record_payload["session_id"] == session_id
@@ -745,6 +749,8 @@ def test_promote_finish_candidates_copies_into_pending_area(tmp_path: Path) -> N
         assert record_payload["soft_blocked"] is True
         assert record_payload["next_step"] == "run_manual_edit"
         assert "edit_before_promote" in record_payload["promotion_warning"]
+        assert "review_recommendation: edit_before_promote" in record_text
+        assert "next_step: run_manual_edit" in record_text
         assert result["review_recommendation"] == "edit_before_promote"
         assert result["soft_blocked"] is True
         assert result["next_step"] == "run_manual_edit"

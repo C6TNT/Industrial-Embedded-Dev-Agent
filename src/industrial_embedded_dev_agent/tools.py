@@ -569,6 +569,7 @@ def promote_finish_candidates(
     promoted_log_path = pending_logs_dir / f"{session_id}_log_candidate.json"
     promoted_benchmark_path = pending_benchmarks_dir / f"{session_id}_benchmark_candidate.json"
     promotion_record_path = pending_root / "promotion_records" / f"{session_id}_promotion_record.json"
+    promotion_markdown_path = pending_root / "promotion_records" / f"{session_id}_promotion_record.md"
     promotion_record_path.parent.mkdir(parents=True, exist_ok=True)
 
     if case_path.exists():
@@ -605,12 +606,15 @@ def promote_finish_candidates(
     }
     promotion_record_path.write_text(json.dumps(promotion_record, ensure_ascii=False, indent=2), encoding="utf-8")
     copied_files.append(str(promotion_record_path))
+    promotion_markdown_path.write_text(_render_promotion_record_markdown(promotion_record), encoding="utf-8")
+    copied_files.append(str(promotion_markdown_path))
 
     return {
         "session_id": session_id,
         "pending_root": str(pending_root),
         "files": copied_files,
         "promotion_record": str(promotion_record_path),
+        "promotion_record_markdown": str(promotion_markdown_path),
         "review_recommendation": review_recommendation,
         "soft_blocked": soft_blocked,
         "next_step": next_step,
@@ -2436,6 +2440,7 @@ def _render_finish_candidate_review_markdown(
         "",
         f"- quality_check_present: {review_payload.get('quality_check_present', False)}",
         f"- quality_overall_passed: {review_payload.get('quality_overall_passed', False)}",
+        f"- quality_level: {review_payload.get('quality_level', '')}",
         f"- quality_summary_path: {review_payload.get('quality_summary_path', '')}",
         "",
         "### Quality Warnings",
@@ -2465,6 +2470,30 @@ def _render_finish_candidate_review_markdown(
     else:
         insertion_index = lines.index("## Benchmark Preview")
         lines[insertion_index:insertion_index] = ["- none", ""]
+    return "\n".join(lines)
+
+
+def _render_promotion_record_markdown(promotion_record: dict[str, object]) -> str:
+    lines = [
+        "# Promotion Record",
+        "",
+        f"- session_id: {promotion_record.get('session_id', '')}",
+        f"- prep_dir: {promotion_record.get('prep_dir', '')}",
+        f"- candidate_dir: {promotion_record.get('candidate_dir', '')}",
+        f"- review_summary_path: {promotion_record.get('review_summary_path', '')}",
+        f"- review_recommendation: {promotion_record.get('review_recommendation', '')}",
+        f"- soft_blocked: {promotion_record.get('soft_blocked', False)}",
+        f"- next_step: {promotion_record.get('next_step', '')}",
+        f"- promotion_warning: {promotion_record.get('promotion_warning', '')}",
+        "",
+        "## Promoted Files",
+        "",
+        f"- case: {promotion_record.get('promoted_case_path', '')}",
+        f"- log: {promotion_record.get('promoted_log_path', '')}",
+        f"- benchmark: {promotion_record.get('promoted_benchmark_path', '')}",
+        f"- pending_benchmark_jsonl: {promotion_record.get('pending_benchmark_jsonl', '')}",
+        "",
+    ]
     return "\n".join(lines)
 
 
