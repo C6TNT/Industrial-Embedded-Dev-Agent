@@ -291,3 +291,11 @@ Before merging these changes, it is useful to confirm:
 - lower-quality candidates really receive lower `quality_score`
 - `merge_plan` and `formal_merge_assistant` still surface the score in Markdown output
 - the score does not contradict the visible `quality_level`
+## Top Review Summary Note
+
+If you change merge planning or formal merge rendering, please also verify the `Top Candidates To Review First` section.
+
+The current expectation is:
+- highest-value candidates appear first
+- both `eligible` and `deferred` items may appear there
+- the section is only a review aid and must stay consistent with the full lists below it

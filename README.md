@@ -385,3 +385,17 @@ The current merge chain now preserves all four quality signals together:
 - `quality_level`
 - `review_recommendation`
 - `next_step`
+## Top Review Summary
+
+`merge_plan.md` and `formal_merge_assistant.md` now expose a short `Top Candidates To Review First` section.
+
+Why it exists:
+- the merge chain can now surface both `eligible` and `deferred` candidates together
+- candidates are already ordered by `quality_score`
+- reviewers should be able to see the most worth-reviewing items without scanning the full list first
+
+Current behavior:
+- the summary mixes `eligible` and `deferred` candidates
+- each entry shows `quality_level`, `quality_score`, `review_recommendation`, and `next_step`
+- entries are sorted by `quality_score` descending
+- the section is a review shortcut only; it does not change the underlying gating rules

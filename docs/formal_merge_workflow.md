@@ -480,3 +480,19 @@ Interpretation guidance:
 - treat the score as a ranking helper, not a canonical truth value
 - rely on `quality_level` for the main class boundary
 - rely on `review_recommendation` and `next_step` for workflow decisions
+## Top Candidates To Review First
+
+The formal merge flow now includes a short review-focused summary in:
+- `merge_plan.md`
+- `formal_merge_assistant.md`
+
+Purpose:
+- reduce scan time for human reviewers
+- show the most relevant candidates immediately
+- preserve the full eligible/deferred lists below for complete context
+
+Rules:
+- the summary is built from the already-sorted candidate lists
+- candidates are ordered by `quality_score` descending
+- both `eligible` and `deferred` items can appear in the summary
+- the summary does not override `eligible/deferred` routing; it only improves review ergonomics
