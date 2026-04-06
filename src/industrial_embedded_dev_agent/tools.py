@@ -721,6 +721,11 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
                 }
             )
 
+    case_candidates = _sort_candidates_by_quality_score(case_candidates)
+    log_candidates = _sort_candidates_by_quality_score(log_candidates)
+    benchmark_candidates = _sort_candidates_by_quality_score(benchmark_candidates)
+    deferred_candidates = _sort_candidates_by_quality_score(deferred_candidates)
+
     plan_payload = {
         "pending_root": str(pending_root),
         "case_candidates": case_candidates,
@@ -2438,6 +2443,17 @@ def _overall_quality_score(results: list[dict[str, object]]) -> int:
     if not scores:
         return 0
     return int(sum(scores) / len(scores))
+
+
+def _sort_candidates_by_quality_score(candidates: list[dict[str, object]]) -> list[dict[str, object]]:
+    return sorted(
+        candidates,
+        key=lambda item: (
+            -int(item.get("quality_score", 0)),
+            str(item.get("session_id", "")),
+            str(item.get("source", "")),
+        ),
+    )
 
 
 def _resolve_merge_plan_sources(entries: object) -> list[Path]:

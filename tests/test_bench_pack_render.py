@@ -831,6 +831,76 @@ def test_plan_pending_merge_generates_merge_plan(tmp_path: Path) -> None:
         _reset_pending_root()
 
 
+def test_merge_planning_orders_candidates_by_quality_score() -> None:
+    _reset_pending_root()
+    try:
+        pending_root = REPO_ROOT / "data" / "pending"
+        cases_dir = pending_root / "cases"
+        promotion_records_dir = pending_root / "promotion_records"
+
+        (cases_dir / "bench-low_case_candidate.md").write_text("# low\n", encoding="utf-8")
+        (cases_dir / "bench-high_case_candidate.md").write_text("# high\n", encoding="utf-8")
+        (cases_dir / "bench-blocked_case_candidate.md").write_text("# blocked\n", encoding="utf-8")
+
+        (promotion_records_dir / "bench-low_promotion_record.json").write_text(
+            json.dumps(
+                {
+                    "session_id": "bench-low",
+                    "review_recommendation": "promote_now",
+                    "quality_level": "weak",
+                    "quality_score": 61,
+                    "next_step": "continue_to_pending_merge",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (promotion_records_dir / "bench-high_promotion_record.json").write_text(
+            json.dumps(
+                {
+                    "session_id": "bench-high",
+                    "review_recommendation": "promote_now",
+                    "quality_level": "good",
+                    "quality_score": 95,
+                    "next_step": "continue_to_pending_merge",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (promotion_records_dir / "bench-blocked_promotion_record.json").write_text(
+            json.dumps(
+                {
+                    "session_id": "bench-blocked",
+                    "review_recommendation": "hold_for_manual_analysis",
+                    "quality_level": "blocked",
+                    "quality_score": 15,
+                    "next_step": "stop_and_analyze",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        plan_result = plan_pending_merge(REPO_ROOT)
+        plan_payload = json.loads(Path(plan_result["merge_plan_json"]).read_text(encoding="utf-8"))
+        plan_text = Path(plan_result["merge_plan_markdown"]).read_text(encoding="utf-8")
+
+        assert [item["session_id"] for item in plan_payload["case_candidates"]] == ["bench-high", "bench-low"]
+        assert [item["quality_score"] for item in plan_payload["case_candidates"]] == [95, 61]
+        assert [item["session_id"] for item in plan_payload["deferred_candidates"]] == ["bench-blocked"]
+        assert plan_text.index("bench-high_case_candidate.md") < plan_text.index("bench-low_case_candidate.md")
+
+        assistant_result = prepare_formal_merge_assistant(REPO_ROOT)
+        assistant_text = Path(assistant_result["formal_merge_assistant_markdown"]).read_text(encoding="utf-8")
+        assert assistant_text.index("bench-high_case_candidate.md") < assistant_text.index("bench-low_case_candidate.md")
+    finally:
+        _reset_pending_root()
+
+
 def test_prepare_formal_merge_assistant_generates_draft_merge_bundle(tmp_path: Path) -> None:
     session_id = "bench-am-10"
     session_dir = REPO_ROOT / "reports" / "bench_packs" / "sessions" / session_id
