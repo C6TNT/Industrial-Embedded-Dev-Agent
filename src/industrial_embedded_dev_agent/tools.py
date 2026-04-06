@@ -1135,6 +1135,73 @@ def canonical_merge_preview_bundle(root: Path) -> dict[str, object]:
     }
 
 
+def canonical_merge_report(root: Path) -> dict[str, object]:
+    assistant_dir = root / "data" / "pending" / "formal_merge_assistant"
+    report_dir = assistant_dir / "canonical_merge_report"
+    report_dir.mkdir(parents=True, exist_ok=True)
+
+    preflight = canonical_merge_preflight(root)
+    patch_bundle = canonical_patch_helper(root)
+    preview_bundle = canonical_merge_preview_bundle(root)
+
+    report_payload = {
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "assistant_dir": str(assistant_dir),
+        "overall_ready_for_manual_canonical_review": bool(preflight.get("passed", False)),
+        "review_order": [
+            "1. Review canonical_merge_preflight.md for readiness and conflicts.",
+            "2. Review canonical_patch_manifest.md and the generated append patch files.",
+            "3. Review canonical_merge_preview_manifest.md and the preview files.",
+            "4. Only after manual review, decide whether to apply curated changes into canonical files.",
+        ],
+        "preflight": {
+            "passed": bool(preflight.get("passed", False)),
+            "json": preflight.get("canonical_merge_preflight_json", ""),
+            "markdown": preflight.get("canonical_merge_preflight_markdown", ""),
+            "benchmark_patch_count": preflight.get("benchmark_patch_count", 0),
+            "proposed_material_entry_count": preflight.get("proposed_material_entry_count", 0),
+        },
+        "patch_bundle": {
+            "root": patch_bundle.get("output_dir", ""),
+            "manifest_json": patch_bundle.get("canonical_patch_manifest_json", ""),
+            "manifest_markdown": patch_bundle.get("canonical_patch_manifest_markdown", ""),
+            "benchmark_append_patch": patch_bundle.get("benchmark_append_patch", ""),
+            "material_index_append_patch": patch_bundle.get("material_index_append_patch", ""),
+            "materials_case_candidates": patch_bundle.get("materials_case_candidates", ""),
+            "recommended_commit_split": patch_bundle.get("recommended_commit_split", ""),
+        },
+        "preview_bundle": {
+            "root": preview_bundle.get("output_dir", ""),
+            "manifest_json": preview_bundle.get("canonical_merge_preview_manifest_json", ""),
+            "manifest_markdown": preview_bundle.get("canonical_merge_preview_manifest_markdown", ""),
+            "benchmark_preview": preview_bundle.get("benchmark_preview", ""),
+            "material_index_preview": preview_bundle.get("material_index_preview", ""),
+            "materials_case_preview": preview_bundle.get("materials_case_preview", ""),
+            "recommended_commit_split_preview": preview_bundle.get("recommended_commit_split_preview", ""),
+        },
+        "notes": [
+            "This report does not modify canonical files.",
+            "Use it as a single overview page before any manual canonical merge decision.",
+            "If preflight is not ready, review pending candidates and staging outputs before continuing.",
+        ],
+    }
+
+    report_json = report_dir / "canonical_merge_report.json"
+    report_json.write_text(json.dumps(report_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    report_md = report_dir / "canonical_merge_report.md"
+    report_md.write_text(_render_canonical_merge_report_markdown(report_payload), encoding="utf-8")
+
+    return {
+        "output_dir": str(report_dir),
+        "canonical_merge_report_json": str(report_json),
+        "canonical_merge_report_markdown": str(report_md),
+        "preflight_markdown": str(preflight.get("canonical_merge_preflight_markdown", "")),
+        "patch_manifest_markdown": str(patch_bundle.get("canonical_patch_manifest_markdown", "")),
+        "preview_manifest_markdown": str(preview_bundle.get("canonical_merge_preview_manifest_markdown", "")),
+    }
+
+
 def build_bench_pack(
     root: Path,
     request: str,
@@ -2237,6 +2304,65 @@ def _render_canonical_merge_preview_manifest_markdown(manifest: dict[str, object
         "## Notes",
         "",
     ]
+    if notes:
+        for note in notes:
+            lines.append(f"- {note}")
+    else:
+        lines.append("- none")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _render_canonical_merge_report_markdown(payload: dict[str, object]) -> str:
+    preflight = payload.get("preflight", {})
+    patch_bundle = payload.get("patch_bundle", {})
+    preview_bundle = payload.get("preview_bundle", {})
+    review_order = payload.get("review_order", [])
+    notes = payload.get("notes", [])
+    lines = [
+        "# Canonical Merge Report",
+        "",
+        f"- generated_at: {payload.get('generated_at', '')}",
+        f"- assistant_dir: {payload.get('assistant_dir', '')}",
+        f"- overall_ready_for_manual_canonical_review: {payload.get('overall_ready_for_manual_canonical_review', False)}",
+        "",
+        "## Preflight",
+        "",
+        f"- passed: {preflight.get('passed', False)}",
+        f"- benchmark_patch_count: {preflight.get('benchmark_patch_count', 0)}",
+        f"- proposed_material_entry_count: {preflight.get('proposed_material_entry_count', 0)}",
+        f"- json: {preflight.get('json', '')}",
+        f"- markdown: {preflight.get('markdown', '')}",
+        "",
+        "## Patch Bundle",
+        "",
+        f"- root: {patch_bundle.get('root', '')}",
+        f"- manifest_json: {patch_bundle.get('manifest_json', '')}",
+        f"- manifest_markdown: {patch_bundle.get('manifest_markdown', '')}",
+        f"- benchmark_append_patch: {patch_bundle.get('benchmark_append_patch', '')}",
+        f"- material_index_append_patch: {patch_bundle.get('material_index_append_patch', '')}",
+        f"- materials_case_candidates: {patch_bundle.get('materials_case_candidates', '')}",
+        f"- recommended_commit_split: {patch_bundle.get('recommended_commit_split', '')}",
+        "",
+        "## Preview Bundle",
+        "",
+        f"- root: {preview_bundle.get('root', '')}",
+        f"- manifest_json: {preview_bundle.get('manifest_json', '')}",
+        f"- manifest_markdown: {preview_bundle.get('manifest_markdown', '')}",
+        f"- benchmark_preview: {preview_bundle.get('benchmark_preview', '')}",
+        f"- material_index_preview: {preview_bundle.get('material_index_preview', '')}",
+        f"- materials_case_preview: {preview_bundle.get('materials_case_preview', '')}",
+        f"- recommended_commit_split_preview: {preview_bundle.get('recommended_commit_split_preview', '')}",
+        "",
+        "## Recommended Review Order",
+        "",
+    ]
+    if review_order:
+        for item in review_order:
+            lines.append(f"- {item}")
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Notes", ""])
     if notes:
         for note in notes:
             lines.append(f"- {note}")
