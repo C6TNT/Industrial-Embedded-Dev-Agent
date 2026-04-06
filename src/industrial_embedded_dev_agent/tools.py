@@ -407,10 +407,12 @@ def review_finish_candidates(
     case_path = candidate_dir / "case_candidate.md"
     log_path = candidate_dir / "log_candidate.json"
     benchmark_path = candidate_dir / "benchmark_candidate.json"
+    quality_json_path = finish_dir / "candidate_quality_check" / "candidate_quality_check.json"
 
     case_text = case_path.read_text(encoding="utf-8") if case_path.exists() else ""
     log_payload = json.loads(log_path.read_text(encoding="utf-8")) if log_path.exists() else {}
     benchmark_payload = json.loads(benchmark_path.read_text(encoding="utf-8")) if benchmark_path.exists() else {}
+    quality_payload = json.loads(quality_json_path.read_text(encoding="utf-8")) if quality_json_path.exists() else {}
 
     review_payload = {
         "session_id": session_id,
@@ -423,6 +425,10 @@ def review_finish_candidates(
         "risk_level": log_payload.get("risk_level", ""),
         "benchmark_item_type": benchmark_payload.get("item_type", ""),
         "benchmark_tags": benchmark_payload.get("tags", []),
+        "quality_check_present": quality_json_path.exists(),
+        "quality_overall_passed": quality_payload.get("overall_passed", False),
+        "quality_warnings": quality_payload.get("warnings", []),
+        "quality_summary_path": str(quality_json_path) if quality_json_path.exists() else "",
     }
 
     review_json_path = review_dir / "review_summary.json"
@@ -434,6 +440,7 @@ def review_finish_candidates(
             review_payload,
             case_preview=case_text,
             benchmark_payload=benchmark_payload,
+            quality_payload=quality_payload,
         ),
         encoding="utf-8",
     )
@@ -2204,10 +2211,12 @@ def _render_finish_candidate_review_markdown(
     *,
     case_preview: str,
     benchmark_payload: dict[str, object],
+    quality_payload: dict[str, object],
 ) -> str:
     preview_lines = case_preview.splitlines()[:12]
     benchmark_tags = benchmark_payload.get("tags", [])
     benchmark_question = benchmark_payload.get("input", {}).get("question", "")
+    quality_warnings = quality_payload.get("warnings", [])
     lines = [
         "# Finish Candidate Review",
         "",
@@ -2222,6 +2231,14 @@ def _render_finish_candidate_review_markdown(
         f"- case_candidate: {review_payload.get('has_case_candidate', False)}",
         f"- log_candidate: {review_payload.get('has_log_candidate', False)}",
         f"- benchmark_candidate: {review_payload.get('has_benchmark_candidate', False)}",
+        "",
+        "## Candidate Quality Check",
+        "",
+        f"- quality_check_present: {review_payload.get('quality_check_present', False)}",
+        f"- quality_overall_passed: {review_payload.get('quality_overall_passed', False)}",
+        f"- quality_summary_path: {review_payload.get('quality_summary_path', '')}",
+        "",
+        "### Quality Warnings",
         "",
         "## Benchmark Preview",
         "",
@@ -2240,6 +2257,13 @@ def _render_finish_candidate_review_markdown(
         "- Should this candidate stay as a draft, be edited, or be promoted into the formal dataset?",
         "",
     ]
+    if quality_warnings:
+        insertion_index = lines.index("## Benchmark Preview")
+        quality_lines = [f"- {warning}" for warning in quality_warnings]
+        lines[insertion_index:insertion_index] = quality_lines + [""]
+    else:
+        insertion_index = lines.index("## Benchmark Preview")
+        lines[insertion_index:insertion_index] = ["- none", ""]
     return "\n".join(lines)
 
 

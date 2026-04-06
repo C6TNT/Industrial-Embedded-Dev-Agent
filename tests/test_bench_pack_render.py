@@ -598,6 +598,11 @@ def test_review_finish_candidates_generates_review_summary(tmp_path: Path) -> No
         session_id=session_id,
         prep_dir=Path(prep["output_dir"]),
     )
+    candidate_quality_check(
+        REPO_ROOT,
+        session_id=session_id,
+        prep_dir=Path(prep["output_dir"]),
+    )
 
     result = review_finish_candidates(
         REPO_ROOT,
@@ -615,8 +620,11 @@ def test_review_finish_candidates_generates_review_summary(tmp_path: Path) -> No
     assert review_json.exists()
     assert review_md.exists()
     assert review_payload["session_id"] == session_id
+    assert review_payload["quality_check_present"] is True
     assert "## Reviewer Checklist" in review_text
     assert "suggested_tag" in review_text
+    assert "## Candidate Quality Check" in review_text
+    assert "quality_summary_path" in review_text
 
 
 def test_candidate_quality_check_generates_quality_summary(tmp_path: Path) -> None:
