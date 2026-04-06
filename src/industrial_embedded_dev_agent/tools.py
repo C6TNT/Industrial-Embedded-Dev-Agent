@@ -653,6 +653,7 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
             "suggested_target": "data/materials/",
             "action": "review_and_copy",
             "review_recommendation": review_info.get("review_recommendation", ""),
+            "quality_level": review_info.get("quality_level", ""),
             "next_step": next_step,
         }
         if next_step == "continue_to_pending_merge":
@@ -676,6 +677,7 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
             "suggested_target": "data/materials/ or future log corpus",
             "action": "review_and_reclassify",
             "review_recommendation": review_info.get("review_recommendation", ""),
+            "quality_level": review_info.get("quality_level", ""),
             "next_step": next_step,
         }
         if next_step == "continue_to_pending_merge":
@@ -699,6 +701,7 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
             "suggested_target": "data/benchmark/benchmark_v1.jsonl",
             "action": "review_then_append",
             "review_recommendation": review_info.get("review_recommendation", ""),
+            "quality_level": review_info.get("quality_level", ""),
             "next_step": next_step,
         }
         if next_step == "continue_to_pending_merge":
@@ -2557,7 +2560,11 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
     case_candidates = plan_payload.get("case_candidates", [])
     if case_candidates:
         for item in case_candidates:
-            lines.append(f"- {item.get('source', '')} -> {item.get('suggested_target', '')} ({item.get('action', '')})")
+            lines.append(
+                f"- {item.get('source', '')} -> {item.get('suggested_target', '')} "
+                f"({item.get('action', '')}; quality_level={item.get('quality_level', '')}; "
+                f"review_recommendation={item.get('review_recommendation', '')})"
+            )
     else:
         lines.append("- none")
 
@@ -2565,7 +2572,11 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
     log_candidates = plan_payload.get("log_candidates", [])
     if log_candidates:
         for item in log_candidates:
-            lines.append(f"- {item.get('source', '')} -> {item.get('suggested_target', '')} ({item.get('action', '')})")
+            lines.append(
+                f"- {item.get('source', '')} -> {item.get('suggested_target', '')} "
+                f"({item.get('action', '')}; quality_level={item.get('quality_level', '')}; "
+                f"review_recommendation={item.get('review_recommendation', '')})"
+            )
     else:
         lines.append("- none")
 
@@ -2573,7 +2584,11 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
     benchmark_candidates = plan_payload.get("benchmark_candidates", [])
     if benchmark_candidates:
         for item in benchmark_candidates:
-            lines.append(f"- {item.get('source', '')} -> {item.get('suggested_target', '')} ({item.get('action', '')})")
+            lines.append(
+                f"- {item.get('source', '')} -> {item.get('suggested_target', '')} "
+                f"({item.get('action', '')}; quality_level={item.get('quality_level', '')}; "
+                f"review_recommendation={item.get('review_recommendation', '')})"
+            )
     else:
         lines.append("- none")
 
@@ -2583,7 +2598,8 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
         for item in deferred_candidates:
             lines.append(
                 f"- [{item.get('candidate_type', '')}] {item.get('source', '')} "
-                f"({item.get('deferred_reason', '')})"
+                f"({item.get('deferred_reason', '')}; quality_level={item.get('quality_level', '')}; "
+                f"review_recommendation={item.get('review_recommendation', '')}; next_step={item.get('next_step', '')})"
             )
     else:
         lines.append("- none")
@@ -2709,11 +2725,27 @@ def _render_formal_merge_assistant_markdown(
         if items:
             for item in items:
                 lines.append(
-                    f"- {item.get('source', '')} -> {item.get('suggested_target', '')} ({item.get('action', '')})"
+                    f"- {item.get('source', '')} -> {item.get('suggested_target', '')} "
+                    f"({item.get('action', '')}; quality_level={item.get('quality_level', '')}; "
+                    f"review_recommendation={item.get('review_recommendation', '')})"
                 )
         else:
             lines.append("- none")
         lines.append("")
+
+    deferred_candidates = merge_plan_payload.get("deferred_candidates", [])
+    lines.extend(["### deferred_candidates"])
+    if deferred_candidates:
+        for item in deferred_candidates:
+            lines.append(
+                f"- [{item.get('candidate_type', '')}] {item.get('source', '')} "
+                f"(quality_level={item.get('quality_level', '')}; "
+                f"review_recommendation={item.get('review_recommendation', '')}; "
+                f"next_step={item.get('next_step', '')})"
+            )
+    else:
+        lines.append("- none")
+    lines.append("")
 
     lines.extend(
         [
