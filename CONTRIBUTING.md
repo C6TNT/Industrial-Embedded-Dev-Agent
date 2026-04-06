@@ -149,6 +149,7 @@ ieda tools prep-real-bench --session-id <session-id> --label "<session label>"
 
 - `docs/formal_merge_quickstart.md`
 - `docs/manual_canonical_merge_guide.md`
+- `docs/real_bench_to_formal_merge_map.md`
 
 ### 日志样本
 
