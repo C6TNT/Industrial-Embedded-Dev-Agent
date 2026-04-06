@@ -427,6 +427,7 @@ def review_finish_candidates(
         "benchmark_tags": benchmark_payload.get("tags", []),
         "quality_check_present": quality_json_path.exists(),
         "quality_overall_passed": quality_payload.get("overall_passed", False),
+        "quality_level": quality_payload.get("quality_level", ""),
         "quality_warnings": quality_payload.get("warnings", []),
         "quality_summary_path": str(quality_json_path) if quality_json_path.exists() else "",
     }
@@ -480,17 +481,23 @@ def candidate_quality_check(
     benchmark_result = _evaluate_benchmark_candidate(benchmark_path, benchmark_payload)
 
     warnings = [*case_result["warnings"], *log_result["warnings"], *benchmark_result["warnings"]]
+    quality_level = _overall_quality_level([case_result, log_result, benchmark_result])
     overall_passed = bool(case_result["passed"] and log_result["passed"] and benchmark_result["passed"])
     next_action = (
         "Candidate set looks good enough for manual review. Continue with review-finish-candidates."
-        if overall_passed
-        else "Review the warnings first, then edit weak candidate drafts before promotion."
+        if quality_level == "good"
+        else (
+            "Review the warnings first, then edit weak candidate drafts before promotion."
+            if quality_level == "weak"
+            else "Candidate set is blocked. Fix missing or critical fields before review and promotion."
+        )
     )
 
     payload = {
         "session_id": session_id,
         "candidate_dir": str(candidate_dir),
         "overall_passed": overall_passed,
+        "quality_level": quality_level,
         "case_candidate": case_result,
         "log_candidate": log_result,
         "benchmark_candidate": benchmark_result,
@@ -2227,7 +2234,7 @@ def _evaluate_case_candidate(path: Path, text: str) -> dict[str, object]:
     exists = path.exists()
     if not exists:
         warnings.append("case candidate file is missing")
-        return {"exists": False, "passed": False, "warnings": warnings, "length": 0}
+        return {"exists": False, "passed": False, "warnings": warnings, "length": 0, "quality_level": "blocked"}
 
     normalized = text.strip()
     length = len(normalized)
@@ -2243,6 +2250,7 @@ def _evaluate_case_candidate(path: Path, text: str) -> dict[str, object]:
         "passed": len(warnings) == 0,
         "warnings": warnings,
         "length": length,
+        "quality_level": _quality_level(exists=True, warnings=warnings),
     }
 
 
@@ -2251,7 +2259,7 @@ def _evaluate_log_candidate(path: Path, payload: dict[str, object]) -> dict[str,
     exists = path.exists()
     if not exists:
         warnings.append("log candidate file is missing")
-        return {"exists": False, "passed": False, "warnings": warnings}
+        return {"exists": False, "passed": False, "warnings": warnings, "quality_level": "blocked"}
 
     required_fields = ["session_id", "suggested_tag", "tool_id", "risk_level", "parsed_output"]
     missing_fields = [field for field in required_fields if not payload.get(field)]
@@ -2275,6 +2283,11 @@ def _evaluate_log_candidate(path: Path, payload: dict[str, object]) -> dict[str,
         "passed": len(warnings) == 0,
         "warnings": warnings,
         "required_fields_present": len(missing_fields) == 0,
+        "quality_level": _quality_level(
+            exists=True,
+            warnings=warnings,
+            critical_failed=bool(missing_fields),
+        ),
     }
 
 
@@ -2283,7 +2296,7 @@ def _evaluate_benchmark_candidate(path: Path, payload: dict[str, object]) -> dic
     exists = path.exists()
     if not exists:
         warnings.append("benchmark candidate file is missing")
-        return {"exists": False, "passed": False, "warnings": warnings}
+        return {"exists": False, "passed": False, "warnings": warnings, "quality_level": "blocked"}
 
     candidate_id = str(payload.get("id", "")).strip()
     item_type = str(payload.get("item_type", "")).strip()
@@ -2312,6 +2325,11 @@ def _evaluate_benchmark_candidate(path: Path, payload: dict[str, object]) -> dic
         "passed": len(warnings) == 0,
         "warnings": warnings,
         "candidate_id": candidate_id,
+        "quality_level": _quality_level(
+            exists=True,
+            warnings=warnings,
+            critical_failed=not candidate_id or not item_type or not question,
+        ),
     }
 
 
@@ -2323,13 +2341,16 @@ def _review_recommendation(review_payload: dict[str, object]) -> str:
     )
     quality_present = bool(review_payload.get("quality_check_present"))
     quality_passed = bool(review_payload.get("quality_overall_passed"))
+    quality_level = str(review_payload.get("quality_level", "")).strip()
     quality_warnings = review_payload.get("quality_warnings", [])
 
     if not has_all_candidates:
         return "hold_for_manual_analysis"
+    if quality_level == "blocked":
+        return "hold_for_manual_analysis"
     if quality_present and quality_passed:
         return "promote_now"
-    if quality_present and quality_warnings:
+    if quality_level == "weak" or (quality_present and quality_warnings):
         return "edit_before_promote"
     return "hold_for_manual_analysis"
 
@@ -2348,6 +2369,23 @@ def _load_promotion_records(promotion_records_dir: Path) -> dict[str, dict[str, 
         if session_id:
             records[session_id] = payload
     return records
+
+
+def _quality_level(*, exists: bool, warnings: list[str], critical_failed: bool = False) -> str:
+    if not exists or critical_failed:
+        return "blocked"
+    if warnings:
+        return "weak"
+    return "good"
+
+
+def _overall_quality_level(results: list[dict[str, object]]) -> str:
+    levels = [str(result.get("quality_level", "")).strip() for result in results]
+    if any(level == "blocked" for level in levels):
+        return "blocked"
+    if any(level == "weak" for level in levels):
+        return "weak"
+    return "good"
 
 
 def _resolve_merge_plan_sources(entries: object) -> list[Path]:
@@ -2437,24 +2475,28 @@ def _render_candidate_quality_check_markdown(payload: dict[str, object]) -> str:
         f"- Session ID: {payload.get('session_id', '')}",
         f"- candidate_dir: {payload.get('candidate_dir', '')}",
         f"- overall_passed: {payload.get('overall_passed', False)}",
+        f"- quality_level: {payload.get('quality_level', '')}",
         f"- next_action: {payload.get('next_action', '')}",
         "",
         "## Case Candidate",
         "",
         f"- exists: {payload.get('case_candidate', {}).get('exists', False)}",
         f"- passed: {payload.get('case_candidate', {}).get('passed', False)}",
+        f"- quality_level: {payload.get('case_candidate', {}).get('quality_level', '')}",
         f"- length: {payload.get('case_candidate', {}).get('length', 0)}",
         "",
         "## Log Candidate",
         "",
         f"- exists: {payload.get('log_candidate', {}).get('exists', False)}",
         f"- passed: {payload.get('log_candidate', {}).get('passed', False)}",
+        f"- quality_level: {payload.get('log_candidate', {}).get('quality_level', '')}",
         f"- required_fields_present: {payload.get('log_candidate', {}).get('required_fields_present', False)}",
         "",
         "## Benchmark Candidate",
         "",
         f"- exists: {payload.get('benchmark_candidate', {}).get('exists', False)}",
         f"- passed: {payload.get('benchmark_candidate', {}).get('passed', False)}",
+        f"- quality_level: {payload.get('benchmark_candidate', {}).get('quality_level', '')}",
         f"- candidate_id: {payload.get('benchmark_candidate', {}).get('candidate_id', '')}",
         "",
         "## Warnings",

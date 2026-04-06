@@ -621,6 +621,7 @@ def test_review_finish_candidates_generates_review_summary(tmp_path: Path) -> No
     assert review_md.exists()
     assert review_payload["session_id"] == session_id
     assert review_payload["quality_check_present"] is True
+    assert review_payload["quality_level"] == "weak"
     assert review_payload["review_recommendation"] == "edit_before_promote"
     assert "## Reviewer Checklist" in review_text
     assert "suggested_tag" in review_text
@@ -671,11 +672,16 @@ def test_candidate_quality_check_generates_quality_summary(tmp_path: Path) -> No
     assert quality_json.exists()
     assert quality_md.exists()
     assert payload["session_id"] == session_id
+    assert payload["quality_level"] == "weak"
     assert payload["case_candidate"]["exists"] is True
+    assert payload["case_candidate"]["quality_level"] == "good"
     assert payload["log_candidate"]["exists"] is True
+    assert payload["log_candidate"]["quality_level"] == "weak"
     assert payload["benchmark_candidate"]["exists"] is True
+    assert payload["benchmark_candidate"]["quality_level"] == "good"
     assert "## Warnings" in text
     assert "## Benchmark Candidate" in text
+    assert "quality_level: weak" in text
 
 
 def test_promote_finish_candidates_copies_into_pending_area(tmp_path: Path) -> None:
