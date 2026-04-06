@@ -252,3 +252,29 @@ ieda tools prep-real-bench --session-id <session-id> --label "<session label>"
 - promotion record 里的 `review_recommendation / next_step / soft_blocked` 是否合理
 - merge plan 里的 `eligible` 和 `deferred` 是否符合预期
 - `apply-formal-merge` 在没有 eligible 候选时是否能明确提示无需继续推进
+
+## Quality Signal Semantics
+
+如果你的改动会影响 candidate 质量判断，请同时检查下面三层语义是否仍然一致：
+
+- `quality_level`
+- `review_recommendation`
+- `next_step`
+
+当前推荐理解是：
+
+- `good`：候选质量基本可接受
+- `weak`：候选可保留，但需要编辑或补强
+- `blocked`：候选当前不应继续推进
+
+并且应继续满足：
+
+- `good` 倾向映射到 `promote_now`
+- `weak` 倾向映射到 `edit_before_promote`
+- `blocked` 倾向映射到 `hold_for_manual_analysis`
+
+后续在 promote/merge 链里，这些信号还会继续影响：
+
+- 是否进入 eligible 候选
+- 是否进入 deferred 路径
+- `apply-formal-merge` 是否提示继续推进

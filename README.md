@@ -342,3 +342,28 @@ ieda tools canonical-merge-checklist
 - 还需要人工润色的候选，不会继续进入 formal merge assistant
 - 需要停下来分析的候选，也不会继续污染 patch / preview / report
 - 当没有 eligible 候选时，`apply-formal-merge --dry-run/--execute` 会明确提示当前无需推进 formal merge
+
+## Quality Signal Update
+
+当前候选质量检查链已经不只输出 `passed / warnings`，还会稳定输出三层机器信号：
+
+- `quality_level`
+- `review_recommendation`
+- `next_step`
+
+其中：
+
+- `quality_level` 用来表达候选本身质量状态：`good / weak / blocked`
+- `review_recommendation` 用来表达 review 阶段建议：`promote_now / edit_before_promote / hold_for_manual_analysis`
+- `next_step` 用来表达 promote 之后的推进方向：`continue_to_pending_merge / run_manual_edit / stop_and_analyze`
+
+这三层现在已经贯穿：
+
+- `candidate-quality-check`
+- `review-finish-candidates`
+- `promote-finish-candidates`
+- `plan-pending-merge`
+- `prepare-formal-merge`
+- `apply-formal-merge`
+
+因此当前 formal merge 链已经不是“只看有没有 warning”，而是会把候选质量、机器建议和下一步动作一起保留下来。

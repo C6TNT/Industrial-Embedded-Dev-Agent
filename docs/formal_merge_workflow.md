@@ -411,3 +411,52 @@ ieda tools canonical-merge-checklist
 - `apply-formal-merge --dry-run` 会返回 `status = no_eligible_candidates`
 - `apply-formal-merge --execute` 的 staging summary 也会保留同样状态
 - 这不是错误，而是明确的“当前无需推进 formal merge”信号
+
+---
+
+## Quality Signals Across The Merge Chain
+
+当前 formal merge 链里，候选会沿着三层信号继续往后传：
+
+- `quality_level`
+- `review_recommendation`
+- `next_step`
+
+### 1. quality_level
+
+由 `candidate-quality-check` 产出，当前分为：
+
+- `good`
+- `weak`
+- `blocked`
+
+### 2. review_recommendation
+
+由 `review-finish-candidates` 结合质量结果产出，当前分为：
+
+- `promote_now`
+- `edit_before_promote`
+- `hold_for_manual_analysis`
+
+### 3. next_step
+
+由 `promote-finish-candidates` 根据 review 建议产出，当前分为：
+
+- `continue_to_pending_merge`
+- `run_manual_edit`
+- `stop_and_analyze`
+
+### 当前传播路径
+
+这三层信号现在会继续出现在：
+
+- `review_summary.md`
+- `promotion_record.json / promotion_record.md`
+- `merge_plan.json / merge_plan.md`
+- `formal_merge_assistant.md`
+
+因此在人工审阅时，你已经可以直接从文档里看到：
+
+- 候选质量属于 `good / weak / blocked`
+- 机器建议是继续 promote、先编辑，还是先停下分析
+- 为什么某条候选会被放进 deferred，而不是继续进入 formal merge bundle
