@@ -231,6 +231,7 @@ ieda tools canonical-merge-checklist
 
 - `docs/real_bench_first_day_plan.md`
 - `docs/real_bench_quickstart.md`
+- `docs/candidate_quality_check_plan.md`
 - `docs/formal_merge_workflow.md`
 - `docs/formal_merge_quickstart.md`
 - `docs/manual_canonical_merge_guide.md`

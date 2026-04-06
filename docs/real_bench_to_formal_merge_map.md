@@ -306,6 +306,7 @@ If you only want the shortest mapping view, use this:
 
 - `docs/real_bench_first_day_plan.md`
 - `docs/real_bench_quickstart.md`
+- `docs/candidate_quality_check_plan.md`
 - `docs/real_bench_readiness_checklist.md`
 - `docs/real_bench_first_run_template.md`
 - `docs/real_bench_issue_capture_template.md`
