@@ -929,11 +929,16 @@ def test_apply_formal_merge_generates_dry_run_summary(tmp_path: Path) -> None:
         assert material_index_patch.exists()
         assert commit_plan.exists()
         assert payload["dry_run"] is True
-        assert len(payload["planned_actions"]["benchmark_appends"]) >= 1
+        assert payload["status"] == "no_eligible_candidates"
+        assert payload["should_continue"] is False
+        assert len(payload["planned_actions"]["benchmark_appends"]) == 0
+        assert len(payload["deferred_candidates"]) >= 3
         assert "## Benchmark Appends" in text
+        assert "## Deferred Candidates" in text
+        assert "No eligible candidates are ready for formal merge yet." in text
         assert "Dry-run only" in text
         assert "## Recommended Commit Split" in text
-        assert len(benchmark_patch_lines) >= 1
+        assert benchmark_patch_lines == []
         assert "formal-benchmark-appends" in commit_plan_text
     finally:
         _reset_pending_root()
@@ -983,6 +988,7 @@ def test_apply_formal_merge_execute_writes_staging_only(tmp_path: Path) -> None:
         result = apply_formal_merge(REPO_ROOT, dry_run=False)
         staging_root = Path(result["staging_root"])
         staged_files = result["staged_files"]
+        staging_summary = json.loads((staging_root / "staging_summary.json").read_text(encoding="utf-8"))
 
         assert result["dry_run"] is False
         assert staging_root.exists()
@@ -990,6 +996,8 @@ def test_apply_formal_merge_execute_writes_staging_only(tmp_path: Path) -> None:
         assert (staging_root / "data" / "materials" / "material_index_append_patch.md").exists()
         assert (staging_root / "data" / "benchmark" / "benchmark_append_patch.jsonl").exists()
         assert (staging_root / "staging_summary.json").exists()
+        assert staging_summary["status"] == "no_eligible_candidates"
+        assert staging_summary["should_continue"] is False
         assert "benchmark_append_patch" in staged_files
         assert benchmark_target.read_text(encoding="utf-8") == benchmark_before
     finally:
@@ -1166,8 +1174,9 @@ def test_canonical_merge_preview_bundle_generates_preview_files(tmp_path: Path) 
         assert material_index_preview.exists()
         assert materials_case_preview.exists()
         assert payload["preview_files"]["benchmark_preview"].endswith("benchmark_v1.preview.jsonl")
-        assert "candidate-bench-am-15" in benchmark_preview_text
+        assert "candidate-bench-am-15" not in benchmark_preview_text
         assert "## Pending Preview Entries" in material_index_preview_text
+        assert "- none" in material_index_preview_text
     finally:
         _reset_pending_root()
 

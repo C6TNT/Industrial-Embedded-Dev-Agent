@@ -835,12 +835,13 @@ def apply_formal_merge(root: Path, *, dry_run: bool = True) -> dict[str, object]
     pending_root = root / "data" / "pending"
     assistant = prepare_formal_merge_assistant(root)
     assistant_dir = Path(str(assistant["output_dir"]))
+    assistant_payload = json.loads(Path(str(assistant["formal_merge_assistant_json"])).read_text(encoding="utf-8"))
 
-    case_files = sorted((pending_root / "cases").glob("*.md")) if (pending_root / "cases").exists() else []
-    log_files = sorted((pending_root / "logs").glob("*.json")) if (pending_root / "logs").exists() else []
-    benchmark_files = sorted(
-        [path for path in (pending_root / "benchmarks").glob("*.json") if path.name != "pending_benchmark_candidates.jsonl"]
-    ) if (pending_root / "benchmarks").exists() else []
+    case_files = _resolve_merge_plan_sources(assistant_payload.get("case_candidates", []))
+    log_files = _resolve_merge_plan_sources(assistant_payload.get("log_candidates", []))
+    benchmark_files = _resolve_merge_plan_sources(assistant_payload.get("benchmark_candidates", []))
+    deferred_candidates = assistant_payload.get("deferred_candidates", [])
+    has_eligible_candidates = bool(case_files or log_files or benchmark_files)
 
     benchmark_target = root / "data" / "benchmark" / "benchmark_v1.jsonl"
     benchmark_existing_count = 0
@@ -891,6 +892,8 @@ def apply_formal_merge(root: Path, *, dry_run: bool = True) -> dict[str, object]
 
     result_payload = {
         "dry_run": dry_run,
+        "status": "ready_for_apply" if has_eligible_candidates else "no_eligible_candidates",
+        "should_continue": has_eligible_candidates,
         "pending_root": str(pending_root),
         "assistant_dir": str(assistant_dir),
         "formal_targets": {
@@ -898,6 +901,7 @@ def apply_formal_merge(root: Path, *, dry_run: bool = True) -> dict[str, object]
             "material_index": "data/materials/material_index_v1.md",
             "benchmark_jsonl": "data/benchmark/benchmark_v1.jsonl",
         },
+        "deferred_candidates": deferred_candidates,
         "planned_actions": {
             "case_material_promotions": material_copy_preview,
             "material_index_updates": material_index_updates,
@@ -926,6 +930,11 @@ def apply_formal_merge(root: Path, *, dry_run: bool = True) -> dict[str, object]
             },
         ],
     }
+    if not has_eligible_candidates:
+        result_payload["notes"].insert(
+            0,
+            "No eligible candidates are ready for formal merge yet. Resolve deferred candidates before continuing.",
+        )
 
     result_json_path = assistant_dir / "apply_formal_merge_dry_run.json"
     result_json_path.write_text(json.dumps(result_payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -975,13 +984,21 @@ def apply_formal_merge(root: Path, *, dry_run: bool = True) -> dict[str, object]
         staged_summary_path = staging_dir / "staging_summary.json"
         staged_summary_payload = {
             "mode": "staging_execute",
+            "status": result_payload["status"],
+            "should_continue": has_eligible_candidates,
             "staging_root": str(staging_dir),
             "staged_files": staged_files,
+            "deferred_candidates": deferred_candidates,
             "notes": [
                 "Canonical dataset files were not modified.",
                 "Review staged patch files before any manual canonical merge.",
             ],
         }
+        if not has_eligible_candidates:
+            staged_summary_payload["notes"].insert(
+                0,
+                "No eligible candidates were staged for canonical merge. Resolve deferred candidates first.",
+            )
         staged_summary_path.parent.mkdir(parents=True, exist_ok=True)
         staged_summary_path.write_text(json.dumps(staged_summary_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         staged_files["staging_summary"] = str(staged_summary_path)
@@ -2644,12 +2661,15 @@ def _render_apply_formal_merge_markdown(payload: dict[str, object]) -> str:
     case_items = planned_actions.get("case_material_promotions", [])
     index_items = planned_actions.get("material_index_updates", [])
     benchmark_items = planned_actions.get("benchmark_appends", [])
+    deferred_items = payload.get("deferred_candidates", [])
     notes = payload.get("notes", [])
 
     lines = [
         "# Apply Formal Merge Dry Run",
         "",
         f"- dry_run: {payload.get('dry_run', True)}",
+        f"- status: {payload.get('status', '')}",
+        f"- should_continue: {payload.get('should_continue', False)}",
         f"- pending_root: {payload.get('pending_root', '')}",
         f"- assistant_dir: {payload.get('assistant_dir', '')}",
         "",
@@ -2676,6 +2696,16 @@ def _render_apply_formal_merge_markdown(payload: dict[str, object]) -> str:
         for item in benchmark_items:
             lines.append(
                 f"- {item.get('candidate_id', '')} ({item.get('item_type', '')}) -> {item.get('target_file', '')} after line {item.get('suggested_append_after_line', '')}"
+            )
+    else:
+        lines.append("- none")
+
+    lines.extend(["", "## Deferred Candidates", ""])
+    if deferred_items:
+        for item in deferred_items:
+            lines.append(
+                f"- [{item.get('candidate_type', '')}] {item.get('source', '')} "
+                f"(next_step={item.get('next_step', '')})"
             )
     else:
         lines.append("- none")
