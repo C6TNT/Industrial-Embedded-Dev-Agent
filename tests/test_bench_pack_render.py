@@ -894,6 +894,8 @@ def test_merge_planning_orders_candidates_by_quality_score() -> None:
         assert [item["quality_score"] for item in plan_payload["case_candidates"]] == [95, 61]
         assert [item["session_id"] for item in plan_payload["deferred_candidates"]] == ["bench-blocked"]
         assert "## Top Candidates To Review First" in plan_text
+        assert "[review_now]" in plan_text
+        assert "[blocked]" in plan_text
         assert "[eligible]" in plan_text
         assert "[deferred]" in plan_text
         assert plan_text.index("bench-high_case_candidate.md") < plan_text.index("bench-low_case_candidate.md")
@@ -901,6 +903,7 @@ def test_merge_planning_orders_candidates_by_quality_score() -> None:
         assistant_result = prepare_formal_merge_assistant(REPO_ROOT)
         assistant_text = Path(assistant_result["formal_merge_assistant_markdown"]).read_text(encoding="utf-8")
         assert "## Top Candidates To Review First" in assistant_text
+        assert "[review_now]" in assistant_text
         assert assistant_text.index("bench-high_case_candidate.md") < assistant_text.index("bench-low_case_candidate.md")
     finally:
         _reset_pending_root()

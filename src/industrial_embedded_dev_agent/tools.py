@@ -2473,7 +2473,26 @@ def _build_top_review_candidates(
         items.append({**candidate, "review_bucket": "eligible"})
     for candidate in deferred_candidates:
         items.append({**candidate, "review_bucket": "deferred"})
-    return _sort_candidates_by_quality_score(items)[:limit]
+    sorted_items = _sort_candidates_by_quality_score(items)[:limit]
+    return [
+        {
+            **item,
+            "review_priority": _review_priority_label(item),
+        }
+        for item in sorted_items
+    ]
+
+
+def _review_priority_label(item: dict[str, object]) -> str:
+    review_bucket = str(item.get("review_bucket", "")).strip()
+    quality_level = str(item.get("quality_level", "")).strip()
+    next_step = str(item.get("next_step", "")).strip()
+
+    if review_bucket == "eligible":
+        return "review_now"
+    if quality_level == "blocked" or next_step == "stop_and_analyze":
+        return "blocked"
+    return "watch"
 
 
 def _resolve_merge_plan_sources(entries: object) -> list[Path]:
@@ -2652,7 +2671,7 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
     if top_review_items:
         for item in top_review_items:
             lines.append(
-                f"- [{item.get('review_bucket', '')}] {item.get('source', '')} "
+                f"- [{item.get('review_priority', '')}] [{item.get('review_bucket', '')}] {item.get('source', '')} "
                 f"(quality_level={item.get('quality_level', '')}; "
                 f"quality_score={item.get('quality_score', 0)}; "
                 f"review_recommendation={item.get('review_recommendation', '')}; "
@@ -2841,7 +2860,7 @@ def _render_formal_merge_assistant_markdown(
     if top_review_items:
         for item in top_review_items:
             lines.append(
-                f"- [{item.get('review_bucket', '')}] {item.get('source', '')} "
+                f"- [{item.get('review_priority', '')}] [{item.get('review_bucket', '')}] {item.get('source', '')} "
                 f"(quality_level={item.get('quality_level', '')}; "
                 f"quality_score={item.get('quality_score', 0)}; "
                 f"review_recommendation={item.get('review_recommendation', '')}; "
