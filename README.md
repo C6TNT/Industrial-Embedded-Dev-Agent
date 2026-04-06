@@ -230,6 +230,7 @@ ieda tools canonical-merge-checklist
 完整说明见：
 
 - `docs/formal_merge_workflow.md`
+- `docs/formal_merge_quickstart.md`
 - `docs/manual_canonical_merge_guide.md`
 
 当前这条链仍然保持低风险：

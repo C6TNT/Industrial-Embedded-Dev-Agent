@@ -277,6 +277,7 @@ ieda tools canonical-merge-checklist
 
 再进入：
 
+- `docs/formal_merge_quickstart.md`
 - `docs/manual_canonical_merge_guide.md`
 
 这份 guide 不是自动执行命令，而是告诉你：
