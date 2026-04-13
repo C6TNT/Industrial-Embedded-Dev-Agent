@@ -751,6 +751,7 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
         "benchmark_candidates": benchmark_candidates,
         "deferred_candidates": deferred_candidates,
         "deferred_by_warning_category": _group_deferred_candidates_by_warning_category(deferred_candidates),
+        "deferred_warning_category_summary": _summarize_deferred_warning_categories(deferred_candidates),
         "counts": {
             "eligible_case_candidates": len(case_candidates),
             "eligible_log_candidates": len(log_candidates),
@@ -2611,6 +2612,25 @@ def _group_deferred_candidates_by_warning_category(
     return ordered_groups
 
 
+def _summarize_deferred_warning_categories(
+    deferred_candidates: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    groups = _group_deferred_candidates_by_warning_category(deferred_candidates)
+    summary: list[dict[str, object]] = []
+    for group in groups:
+        items = group.get("items", [])
+        scores = [int(item.get("quality_score", 0)) for item in items]
+        summary.append(
+            {
+                "category": group.get("category", "uncategorized"),
+                "count": len(items),
+                "max_score": max(scores) if scores else 0,
+                "min_score": min(scores) if scores else 0,
+            }
+        )
+    return summary
+
+
 def _review_priority_label(item: dict[str, object]) -> str:
     review_bucket = str(item.get("review_bucket", "")).strip()
     quality_level = str(item.get("quality_level", "")).strip()
@@ -2900,6 +2920,17 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
         lines.append("- none")
 
     lines.extend(["", "## Deferred Candidates By Warning Category", ""])
+    deferred_summary = plan_payload.get("deferred_warning_category_summary", [])
+    if deferred_summary:
+        lines.extend(["### Category Summary", ""])
+        for item in deferred_summary:
+            lines.append(
+                f"- {item.get('category', 'uncategorized')}: "
+                f"count={item.get('count', 0)}, "
+                f"max_score={item.get('max_score', 0)}, "
+                f"min_score={item.get('min_score', 0)}"
+            )
+        lines.append("")
     deferred_groups = plan_payload.get("deferred_by_warning_category", [])
     if deferred_groups:
         for group in deferred_groups:
@@ -3089,6 +3120,16 @@ def _render_formal_merge_assistant_markdown(
     lines.append("")
 
     lines.extend(["### deferred_by_warning_category"])
+    deferred_summary = merge_plan_payload.get("deferred_warning_category_summary", [])
+    if deferred_summary:
+        lines.append("  summary:")
+        for item in deferred_summary:
+            lines.append(
+                f"  - {item.get('category', 'uncategorized')}: "
+                f"count={item.get('count', 0)}, "
+                f"max_score={item.get('max_score', 0)}, "
+                f"min_score={item.get('min_score', 0)}"
+            )
     deferred_groups = merge_plan_payload.get("deferred_by_warning_category", [])
     if deferred_groups:
         for group in deferred_groups:
