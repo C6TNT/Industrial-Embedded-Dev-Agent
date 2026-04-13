@@ -750,6 +750,7 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
         "log_candidates": log_candidates,
         "benchmark_candidates": benchmark_candidates,
         "deferred_candidates": deferred_candidates,
+        "deferred_by_warning_category": _group_deferred_candidates_by_warning_category(deferred_candidates),
         "counts": {
             "eligible_case_candidates": len(case_candidates),
             "eligible_log_candidates": len(log_candidates),
@@ -2587,6 +2588,29 @@ def _build_top_review_candidates(
     ]
 
 
+def _group_deferred_candidates_by_warning_category(
+    deferred_candidates: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    grouped: dict[str, list[dict[str, object]]] = {}
+    for item in deferred_candidates:
+        categories = item.get("quality_warning_categories", [])
+        if isinstance(categories, list) and categories:
+            category = str(categories[0]).strip() or "uncategorized"
+        else:
+            category = "uncategorized"
+        grouped.setdefault(category, []).append(item)
+
+    ordered_groups: list[dict[str, object]] = []
+    for category in sorted(grouped):
+        ordered_groups.append(
+            {
+                "category": category,
+                "items": _sort_candidates_by_quality_score(grouped[category]),
+            }
+        )
+    return ordered_groups
+
+
 def _review_priority_label(item: dict[str, object]) -> str:
     review_bucket = str(item.get("review_bucket", "")).strip()
     quality_level = str(item.get("quality_level", "")).strip()
@@ -2875,6 +2899,23 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
     else:
         lines.append("- none")
 
+    lines.extend(["", "## Deferred Candidates By Warning Category", ""])
+    deferred_groups = plan_payload.get("deferred_by_warning_category", [])
+    if deferred_groups:
+        for group in deferred_groups:
+            lines.append(f"### {group.get('category', 'uncategorized')}")
+            for item in group.get("items", []):
+                lines.append(
+                    f"- [{item.get('candidate_type', '')}] {item.get('source', '')} "
+                    f"(quality_level={item.get('quality_level', '')}; "
+                    f"quality_score={item.get('quality_score', 0)}; "
+                    f"next_step={item.get('next_step', '')})"
+                )
+            lines.append("")
+    else:
+        lines.append("- none")
+        lines.append("")
+
     lines.extend(
         [
             "",
@@ -3046,6 +3087,23 @@ def _render_formal_merge_assistant_markdown(
     else:
         lines.append("- none")
     lines.append("")
+
+    lines.extend(["### deferred_by_warning_category"])
+    deferred_groups = merge_plan_payload.get("deferred_by_warning_category", [])
+    if deferred_groups:
+        for group in deferred_groups:
+            lines.append(f"- category: {group.get('category', 'uncategorized')}")
+            for item in group.get("items", []):
+                lines.append(
+                    f"  - [{item.get('candidate_type', '')}] {item.get('source', '')} "
+                    f"(quality_level={item.get('quality_level', '')}; "
+                    f"quality_score={item.get('quality_score', 0)}; "
+                    f"next_step={item.get('next_step', '')})"
+                )
+        lines.append("")
+    else:
+        lines.append("- none")
+        lines.append("")
 
     lines.extend(
         [

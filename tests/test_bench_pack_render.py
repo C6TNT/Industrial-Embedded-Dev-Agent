@@ -838,6 +838,7 @@ def test_plan_pending_merge_generates_merge_plan(tmp_path: Path) -> None:
         assert len(plan_payload["benchmark_candidates"]) == 0
         assert len(plan_payload["deferred_candidates"]) >= 3
         assert plan_payload["counts"]["deferred_candidates"] >= 3
+        assert len(plan_payload["deferred_by_warning_category"]) >= 1
         assert all(
             item["next_step"] in {"run_manual_edit", "stop_and_analyze"}
             for item in plan_payload["deferred_candidates"]
@@ -847,6 +848,8 @@ def test_plan_pending_merge_generates_merge_plan(tmp_path: Path) -> None:
         assert all("promotion_guidance" in item for item in plan_payload["deferred_candidates"])
         assert "## Top Candidates To Review First" in plan_text
         assert "## Deferred Candidates" in plan_text
+        assert "## Deferred Candidates By Warning Category" in plan_text
+        assert "### weak_content" in plan_text
         assert "quality_level=" in plan_text
         assert "quality_score=" in plan_text
         assert "guidance:" in plan_text
@@ -1000,6 +1003,8 @@ def test_prepare_formal_merge_assistant_generates_draft_merge_bundle(tmp_path: P
         assert "## Recommended Merge Order" in assistant_text
         assert "## Top Candidates To Review First" in assistant_text
         assert "### deferred_candidates" in assistant_text
+        assert "### deferred_by_warning_category" in assistant_text
+        assert "- category: weak_content" in assistant_text
         assert "quality_level=" in assistant_text
         assert "quality_score=" in assistant_text
         assert "guidance:" in assistant_text
