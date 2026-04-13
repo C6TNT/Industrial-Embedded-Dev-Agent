@@ -428,3 +428,14 @@ Current progression is:
 - merge-plan guidance
 
 This means reviewers can now see not only that a candidate is deferred, but also what kind of fix should happen first.
+## Deferred Grouping By Warning Category
+
+The merge planning flow now keeps two review views for deferred candidates:
+- score-first ordering
+- warning-category grouping
+
+This means reviewers can now:
+- inspect the highest-value deferred candidates first
+- or batch-fix one class of issue at a time, such as `missing_fields` or `weak_content`
+
+The grouped view is additive. It does not replace the ranked deferred list.

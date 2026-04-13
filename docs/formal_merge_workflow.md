@@ -524,3 +524,14 @@ Current interpretation:
 - deferred guidance in merge planning helps reviewers decide what to fix first
 
 This keeps the merge workflow more explainable without changing the canonical safety boundary.
+## Deferred Candidates By Warning Category
+
+The formal merge workflow now renders deferred candidates in two complementary ways:
+- a ranked deferred list
+- a grouped deferred-by-warning-category list
+
+Why both views exist:
+- ranking helps reviewers see the most important deferred items first
+- grouping helps reviewers fix one class of issue in batches
+
+This improves review ergonomics without changing the canonical merge boundary.

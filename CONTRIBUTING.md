@@ -315,3 +315,11 @@ The current expectation is:
 - warning categories explain what kind of issue exists
 - guidance explains what kind of edit or analysis should happen next
 - later workflow signals (`review_recommendation`, `next_step`) stay consistent with that guidance
+## Deferred Grouping Note
+
+If you change pending merge rendering, also verify the grouped deferred view.
+
+Current expectation:
+- deferred candidates still appear in the ranked list
+- the grouped section helps batch-handle one warning category at a time
+- both views should stay consistent with the same underlying deferred set
