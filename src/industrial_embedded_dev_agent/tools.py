@@ -670,6 +670,8 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
             "review_recommendation": review_info.get("review_recommendation", ""),
             "quality_level": review_info.get("quality_level", ""),
             "quality_score": review_info.get("quality_score", 0),
+            "quality_warning_categories": review_info.get("quality_warning_categories", []),
+            "promotion_guidance": review_info.get("promotion_guidance", []),
             "next_step": next_step,
         }
         if next_step == "continue_to_pending_merge":
@@ -695,6 +697,8 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
             "review_recommendation": review_info.get("review_recommendation", ""),
             "quality_level": review_info.get("quality_level", ""),
             "quality_score": review_info.get("quality_score", 0),
+            "quality_warning_categories": review_info.get("quality_warning_categories", []),
+            "promotion_guidance": review_info.get("promotion_guidance", []),
             "next_step": next_step,
         }
         if next_step == "continue_to_pending_merge":
@@ -720,6 +724,8 @@ def plan_pending_merge(root: Path) -> dict[str, object]:
             "review_recommendation": review_info.get("review_recommendation", ""),
             "quality_level": review_info.get("quality_level", ""),
             "quality_score": review_info.get("quality_score", 0),
+            "quality_warning_categories": review_info.get("quality_warning_categories", []),
+            "promotion_guidance": review_info.get("promotion_guidance", []),
             "next_step": next_step,
         }
         if next_step == "continue_to_pending_merge":
@@ -2862,6 +2868,10 @@ def _render_pending_merge_plan_markdown(plan_payload: dict[str, object]) -> str:
                 f"quality_score={item.get('quality_score', 0)}; "
                 f"review_recommendation={item.get('review_recommendation', '')}; next_step={item.get('next_step', '')})"
             )
+            guidance = item.get("promotion_guidance", [])
+            if guidance:
+                for message in guidance:
+                    lines.append(f"  guidance: {message}")
     else:
         lines.append("- none")
 
@@ -3029,6 +3039,10 @@ def _render_formal_merge_assistant_markdown(
                 f"review_recommendation={item.get('review_recommendation', '')}; "
                 f"next_step={item.get('next_step', '')})"
             )
+            guidance = item.get("promotion_guidance", [])
+            if guidance:
+                for message in guidance:
+                    lines.append(f"  guidance: {message}")
     else:
         lines.append("- none")
     lines.append("")

@@ -808,6 +808,11 @@ def test_plan_pending_merge_generates_merge_plan(tmp_path: Path) -> None:
             session_id=session_id,
             prep_dir=Path(prep["output_dir"]),
         )
+        candidate_quality_check(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
         review_finish_candidates(
             REPO_ROOT,
             session_id=session_id,
@@ -839,10 +844,12 @@ def test_plan_pending_merge_generates_merge_plan(tmp_path: Path) -> None:
         )
         assert all("quality_level" in item for item in plan_payload["deferred_candidates"])
         assert all("quality_score" in item for item in plan_payload["deferred_candidates"])
+        assert all("promotion_guidance" in item for item in plan_payload["deferred_candidates"])
         assert "## Top Candidates To Review First" in plan_text
         assert "## Deferred Candidates" in plan_text
         assert "quality_level=" in plan_text
         assert "quality_score=" in plan_text
+        assert "guidance:" in plan_text
         assert "## Merge Guidance" in plan_text
     finally:
         _reset_pending_root()
@@ -952,6 +959,11 @@ def test_prepare_formal_merge_assistant_generates_draft_merge_bundle(tmp_path: P
             session_id=session_id,
             prep_dir=Path(prep["output_dir"]),
         )
+        candidate_quality_check(
+            REPO_ROOT,
+            session_id=session_id,
+            prep_dir=Path(prep["output_dir"]),
+        )
         review_finish_candidates(
             REPO_ROOT,
             session_id=session_id,
@@ -990,6 +1002,7 @@ def test_prepare_formal_merge_assistant_generates_draft_merge_bundle(tmp_path: P
         assert "### deferred_candidates" in assistant_text
         assert "quality_level=" in assistant_text
         assert "quality_score=" in assistant_text
+        assert "guidance:" in assistant_text
         assert benchmark_lines == []
     finally:
         _reset_pending_root()
