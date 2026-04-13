@@ -512,3 +512,15 @@ Current interpretation:
 
 This bucket is derived from the existing merge state and remains a presentation-layer shortcut.
 It does not override `eligible/deferred`, `review_recommendation`, or `next_step`.
+## Guidance Propagation
+
+The formal merge chain now carries lightweight actionable guidance together with the existing quality and routing signals.
+
+Current interpretation:
+- warning categories classify the issue type
+- guidance explains the next human action
+- review recommendation decides whether promotion should continue
+- next step decides whether the candidate remains eligible or deferred
+- deferred guidance in merge planning helps reviewers decide what to fix first
+
+This keeps the merge workflow more explainable without changing the canonical safety boundary.

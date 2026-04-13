@@ -416,3 +416,15 @@ These buckets are only review aids. They do not replace:
 - `quality_level`
 - `review_recommendation`
 - `next_step`
+## Guidance Signals Across The Merge Chain
+
+The merge flow now preserves not only warning categories, but also short actionable guidance derived from them.
+
+Current progression is:
+- warning category
+- quality guidance
+- review recommendation
+- next step
+- merge-plan guidance
+
+This means reviewers can now see not only that a candidate is deferred, but also what kind of fix should happen first.

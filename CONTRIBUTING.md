@@ -307,3 +307,11 @@ Current expectation:
 - `review_now` should highlight the best immediate review targets
 - `watch` should cover deferred-but-still-relevant items
 - `blocked` should stay reserved for candidates that clearly should not move forward yet
+## Guidance Signal Note
+
+If you change candidate quality checks or merge planning summaries, please verify that actionable guidance still stays aligned with warning categories.
+
+The current expectation is:
+- warning categories explain what kind of issue exists
+- guidance explains what kind of edit or analysis should happen next
+- later workflow signals (`review_recommendation`, `next_step`) stay consistent with that guidance
