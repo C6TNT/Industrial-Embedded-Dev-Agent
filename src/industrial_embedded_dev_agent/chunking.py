@@ -21,20 +21,8 @@ TARGET_FILENAMES = {
     "Industrial Embedded Dev Agent_项目方案.md": "PROJECT-SOLUTION",
     "material_index_v1.md": "MATERIAL-INDEX",
     "labels_v1.md": "LABELS-V1",
-    "TLIMX8MP-EVM_上手指南.docx": "DOC-001",
-    "TLIMX8MP-EVM_3月学习总结.docx": "DOC-002",
-    "3月学习过程.docx": "DOC-003",
-    "1-1-调试工具安装.pdf": "DOC-004",
-    "1-2-Linux开发环境搭建.pdf": "DOC-005",
-    "2-1-评估板测试手册.pdf": "DOC-006",
-    "2-4-GDB程序调试方法说明.pdf": "DOC-007",
-    "2-11-Linux-RT系统测试手册.pdf": "DOC-008",
-    "2-12-IgH EtherCAT主站开发案例.pdf": "DOC-009",
-    "3-1-Linux系统使用手册.pdf": "DOC-010",
-    "build_latest.log": "LOG-BUILD-LATEST",
-    "worklog_2026-03-31.docx": "WORKLOG-2026-03-31",
-    "worklog_2026-04-01.docx": "WORKLOG-2026-04-01",
-    "worklog_2026-04-03.docx": "WORKLOG-2026-04-03",
+    "current_ethercat_dynamic_profile_project_v1.md": "CUR-001",
+    "current_ethercat_agent_development_guide.md": "CUR-008",
 }
 
 SKIP_SEGMENTS = {

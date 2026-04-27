@@ -100,8 +100,8 @@ Do not begin with write-path or motion-path scripts.
 Start with:
 
 ```powershell
-python -m industrial_embedded_dev_agent tools plan "先读一下 axis0/axis1 的状态字、错误码和编码器，我要看当前链路是不是还活着。"
-python -m industrial_embedded_dev_agent tools run "先读一下 axis0/axis1 的状态字、错误码和编码器，我要看当前链路是不是还活着。" --execute
+python -m industrial_embedded_dev_agent tools plan "先只读 query 当前 dynamic profile，采集六轴状态字、错误码和 actual_position，确认链路是不是还活着。"
+python -m industrial_embedded_dev_agent tools run "先只读 query 当前 dynamic profile，采集六轴状态字、错误码和 actual_position，确认链路是不是还活着。" --execute
 ```
 
 Expected:
@@ -133,12 +133,13 @@ Focus first on these questions:
 3. Is there any non-zero error code?
 4. Does the snapshot match what the vendor tool shows?
 
-## 8. Cross-Check Against Vendor / SDO Readback
+## 8. Cross-Check Against Dynamic Profile / Runtime Query
 
 Once the low-risk snapshot is readable, compare it with external truth:
 
 - vendor tool readback
-- SDO readback
+- dynamic profile query output
+- known robot6 topology/profile report
 - known stable historical logs
 
 This is the point where `SCRIPT-004` output becomes useful as an engineering baseline, not just as a script result.
@@ -149,7 +150,7 @@ Even on the real bench, do not skip the current risk boundary.
 
 Still blocked by default:
 
-- online RPDO remapping
+- online PDO remapping or dynamic output-path switching
 - control-word rewriting with automatic execution
 - firmware flashing
 - high-risk motion-driving probes
@@ -177,7 +178,7 @@ Recommended order for the first session back:
 4. manual bench safety check
 5. `tools plan` on read-only request
 6. `tools run --execute` on `SCRIPT-004`
-7. compare with vendor / SDO readback
+7. compare with dynamic profile query and stable report baseline
 8. archive the evidence
 
 ## 12. Stop Conditions

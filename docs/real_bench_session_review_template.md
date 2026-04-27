@@ -46,7 +46,7 @@ List the concrete actions that were performed in order.
 - `tools plan`:
 - `tools run --execute`:
 - vendor tool used:
-- SDO/object-dictionary checks used:
+- dynamic profile/runtime checks used:
 
 ## 5. Confirmed Facts
 
@@ -86,7 +86,7 @@ Unconfirmed assumptions:
 - raw stdout/stderr:
 - parsed JSON:
 - vendor tool screenshots:
-- SDO readback notes:
+- dynamic profile query notes:
 - oscilloscope / bus capture:
 - additional logs:
 

@@ -34,7 +34,7 @@ Industrial Embedded Dev Agent（工业嵌入式开发专用 Agent）
 结合你的背景，这个项目非常契合：
 
 - 你具备嵌入式开发、调试、自动化脚本、工业控制联调经验
-- 你已经接触过日志、构建、部署、串口采集、CANopen、RPMsg、伺服联调等典型工业研发痛点
+- 你已经接触过日志、构建、部署、RPMsg、EtherCAT Dynamic Profile、机器人六轴位置模式联调等典型工业研发痛点
 - 你已经开始尝试把 Agent 工作流用于日志分析、问题归因与文档沉淀
 
 因此，这个项目不是从零想象出来的，而是从真实研发场景抽象出来的。
@@ -54,7 +54,7 @@ Industrial Embedded Dev Agent（工业嵌入式开发专用 Agent）
 - 设备启动异常排查
 - 构建与部署异常定位
 - 串口日志分析
-- CAN/CANopen/EtherCAT 联调辅助
+- EtherCAT Dynamic Profile / PDO / robot6 联调辅助
 - 参数变更影响分析
 - 调试报告自动生成
 - 新成员快速上手与知识问答
@@ -149,12 +149,12 @@ Industrial Embedded Dev Agent（工业嵌入式开发专用 Agent）
 - SCP 传输成功但板端未生效
 - systemd 服务未正确启动
 
-### 场景 C：CANopen 联调分析
+### 场景 C：EtherCAT Dynamic Profile 联调分析
 示例问题：
-- RPDO/SDO 参数配置不一致
-- 控制字下发无响应
-- 伺服目标速度未生效
-- 重复励磁或状态机异常
+- profile loaded 但 applied=0
+- slaves=0、inOP=0 或 task=0
+- robot6 轴映射、12/28 变体和 19/13 基线不一致
+- 0x4100 + logical_axis 参数区或 0x41F1 输出门控异常
 
 ---
 
@@ -308,7 +308,7 @@ V1 优先简单、可控，不要被框架绑死。
 确定第一版只解决这三类问题：
 - 启动/日志异常
 - 构建/部署问题
-- CANopen 联调问题
+- EtherCAT Dynamic Profile / robot6 联调问题
 
 输出物：
 - 问题域说明文档
@@ -491,8 +491,8 @@ V1 优先简单、可控，不要被框架绑死。
 目标：扩展协议和场景
 
 扩展方向：
-- CANopen 深化
-- EtherCAT 辅助分析
+- EtherCAT Dynamic Profile 深化
+- Fake Harness 离线回归与真实 report replay
 - 视觉控制链路辅助
 - 版本回归分析
 - 多项目知识隔离
@@ -696,7 +696,7 @@ industrial-embedded-agent/
 请求示例：
 ```json
 {
-  "query": "RPDO1 控制链路稳定基线是什么？",
+  "query": "robot6 位置模式联调的稳定基线是什么？",
   "top_k": 5
 }
 ```
@@ -708,7 +708,7 @@ industrial-embedded-agent/
     {
       "chunk_id": "doc_12_chunk_3",
       "score": 0.91,
-      "text": "RPDO1 下发工作模式、控制字、目标速度……",
+      "text": "A53 解析 XML/ESI 生成 JSON profile，通过 RPMsg 下发 M7，M7 apply profile 并发布 runtime_axis……",
       "source": "mix_protocol.md"
     }
   ]
@@ -880,8 +880,8 @@ industrial-embedded-agent/
 {
   "chunk_id": "doc_12_chunk_3",
   "document_id": "doc_12",
-  "text": "RPDO1 下发工作模式、控制字、目标速度...",
-  "tags": ["canopen", "servo", "baseline"],
+  "text": "A53 解析 XML/ESI 生成 JSON profile，通过 RPMsg 下发 M7，M7 apply profile 并发布 runtime_axis...",
+  "tags": ["ethercat_profile", "robot6_position", "baseline"],
   "source": "mix_protocol.md"
 }
 ```
@@ -1073,7 +1073,7 @@ industrial-embedded-agent/
 | id | UUID | 主键 |
 | user_id | UUID | 关联 users.id |
 | title | VARCHAR(255) | 会话标题 |
-| scenario | VARCHAR(64) | 场景，如 deploy_debug / canopen_debug |
+| scenario | VARCHAR(64) | 场景，如 deploy_debug / ethercat_profile_debug |
 | status | VARCHAR(32) | active / closed / archived |
 | context_json | JSONB | 会话上下文 |
 | created_at | TIMESTAMP | 创建时间 |
@@ -1141,7 +1141,7 @@ industrial-embedded-agent/
 |---|---|---|
 | id | UUID | 主键 |
 | session_id | UUID | 关联 sessions.id |
-| source | VARCHAR(64) | serial/systemd/build/deploy/canopen |
+| source | VARCHAR(64) | serial/systemd/build/deploy/ethercat_profile/fake_harness |
 | device_id | VARCHAR(128) | 设备标识 |
 | raw_text | TEXT | 原始日志 |
 | file_path | TEXT | 原始文件路径，可选 |
@@ -1420,20 +1420,22 @@ apps/api/db/
 {
   "item_type": "knowledge_qa",
   "input_json": {
-    "question": "RPDO1 控制链路稳定基线是什么？"
+    "question": "robot6 位置模式联调的稳定基线是什么？"
   },
   "expected_json": {
     "must_include": [
-      "RPDO1",
-      "工作模式",
-      "控制字",
-      "目标速度"
+      "A53",
+      "JSON profile",
+      "RPMsg",
+      "M7",
+      "runtime_axis",
+      "位置模式"
     ],
     "expected_sources": [
       "mix_protocol.md"
     ]
   },
-  "tags_json": ["canopen", "baseline"],
+  "tags_json": ["ethercat_profile", "robot6_position", "baseline"],
   "difficulty": "medium"
 }
 ```
@@ -1676,8 +1678,8 @@ tests/benchmark/
 - deploy_timing_issue
 - service_autostart_failure
 - serial_no_output
-- canopen_pdo_mismatch
-- servo_reexcitation_issue
+- pdo_ob_ib_mismatch
+- robot6_gate_locked
 
 ### 文件 2：benchmark_seed.jsonl
 先手工写 20 条种子样本：
@@ -1708,4 +1710,3 @@ tests/benchmark/
 
 先把“问题分类体系”和“评测集”握在自己手里，再让 Codex 写代码、让平台接能力；
 因为这两样，才是你这个工业嵌入式 Agent 最不可替代的核心。
-

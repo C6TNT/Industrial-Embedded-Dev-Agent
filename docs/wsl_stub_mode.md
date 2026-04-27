@@ -80,7 +80,7 @@ So you can tell which no-hardware branch is currently active.
 For offline validation, start with `SCRIPT-004`:
 
 ```powershell
-python -m industrial_embedded_dev_agent tools run "运行 tmp_probe_can_heartbeat.py 采集 8 轮状态快照，然后把结果汇总给我。" --execute
+python -m industrial_embedded_dev_agent tools run "只读 query 当前 dynamic profile，采集六轴状态字、错误码和 actual_position，确认链路是不是还活着。" --execute
 ```
 
 Expected shape:
@@ -88,7 +88,7 @@ Expected shape:
 - `returncode = 0`
 - `parsed_output.status = ok`
 - `poll_count` is present
-- `axis0/axis1` snapshots are parsed into structured fields
+- dynamic profile / six-axis readonly snapshots are parsed into structured fields
 
 Recommended offline scenario checks:
 

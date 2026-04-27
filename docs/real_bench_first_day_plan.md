@@ -106,7 +106,7 @@ If this fails, the morning goal becomes:
 Compare the read-only result with:
 
 - vendor tool readback
-- SDO / object dictionary readback
+- dynamic profile query / runtime report readback
 - any known-good historical notes
 
 Goal:
@@ -152,7 +152,7 @@ You do not need risky motion-path probing on day one to call the day successful.
 
 Avoid these on the first day unless there is an unusually strong reason and manual engineering agreement:
 
-- RPDO remapping
+- online PDO remapping or dynamic output-path switching
 - control-word rewriting beyond the current safe policy
 - acceleration/deceleration write verification
 - motion-driving probe scripts
@@ -176,7 +176,7 @@ If the session produced useful evidence, make sure these exist before leaving:
 - kickoff outputs
 - finish outputs
 - first-run notes
-- vendor / SDO comparison notes
+- dynamic profile / runtime query comparison notes
 
 If possible, also run:
 

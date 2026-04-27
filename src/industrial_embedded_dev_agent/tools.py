@@ -20,14 +20,14 @@ WSL_STUB_FLAG = ".ieda_wsl_stub_enabled"
 WSL_STUB_PROFILE = ".ieda_stub_profile.json"
 DEFAULT_STUB_SCENARIO = "nominal"
 STUB_SCENARIOS = {
-    "nominal": "Readable transport with stable idle snapshots on both axes.",
-    "encoder_stall": "Transport stays readable, but encoder feedback stops changing on both axes.",
+    "nominal": "Readable transport with stable idle snapshots on the dynamic EtherCAT runtime baseline.",
+    "encoder_stall": "Transport stays readable, but actual_position feedback stops changing across axes.",
     "axis1_fault": "Transport stays readable, while axis1 reports a non-zero error code and abnormal status.",
     "open_rpmsg_fail": "Transport initialization degrades immediately and OpenRpmsg returns a failure code.",
 }
 
-READONLY_TOKENS = ["状态字", "错误码", "编码器", "只读"]
-SNAPSHOT_TOKENS = ["快照", "采集", "heartbeat"]
+READONLY_TOKENS = ["状态字", "错误码", "编码器", "只读", "query", "profile", "拓扑", "actual_position"]
+SNAPSHOT_TOKENS = ["快照", "采集", "profile snapshot", "report", "fake", "replay"]
 
 
 def build_tool_registry(root: Path) -> list[ToolSpec]:
@@ -35,18 +35,18 @@ def build_tool_registry(root: Path) -> list[ToolSpec]:
     return [
         ToolSpec(
             tool_id="SCRIPT-004",
-            name="probe_can_heartbeat",
-            description="Collect read-only CAN heartbeat and axis status snapshots.",
+            name="probe_dynamic_runtime_readonly",
+            description="Collect read-only dynamic runtime/profile status snapshots.",
             risk_level="L1_low_risk_exec",
             source_script=str(script_root / "tmp_probe_can_heartbeat.py"),
             executor="wsl_python",
             default_env={"POLL_COUNT": "8", "POLL_INTERVAL_SECONDS": "1.0"},
-            tags=["heartbeat", "snapshot", "readonly", "axis_status"],
+            tags=["profile_snapshot", "snapshot", "readonly", "axis_status", "ethercat_profile"],
         ),
         ToolSpec(
             tool_id="SCRIPT-003",
             name="axis_probe",
-            description="Single-axis probe that writes motion parameters then observes feedback.",
+            description="Single-axis motion probe; high risk for real robot use and blocked by default.",
             risk_level="L2_high_risk_exec",
             source_script=str(script_root / "tmp_axis_probe.py"),
             executor="wsl_python",
@@ -55,7 +55,7 @@ def build_tool_registry(root: Path) -> list[ToolSpec]:
         ToolSpec(
             tool_id="SCRIPT-002",
             name="axis_command_and_probe",
-            description="Dual-axis command-and-probe flow for coordinated debugging.",
+            description="Multi-axis command-and-probe flow; high risk for real robot use and blocked by default.",
             risk_level="L2_high_risk_exec",
             source_script=str(script_root / "tmp_axis_command_and_probe.py"),
             executor="wsl_python",
@@ -73,7 +73,7 @@ def build_tool_registry(root: Path) -> list[ToolSpec]:
         ToolSpec(
             tool_id="SCRIPT-005",
             name="verify_acc_dec",
-            description="Verify acceleration/deceleration write-through and encoder changes.",
+            description="Verify motion parameter write-through and feedback changes.",
             risk_level="L2_high_risk_exec",
             source_script=str(script_root / "tmp_verify_acc_dec.py"),
             executor="wsl_python",
@@ -88,6 +88,74 @@ def list_tools(root: Path) -> list[dict[str, object]]:
 
 def list_stub_scenarios() -> list[dict[str, str]]:
     return [{"scenario": name, "description": description} for name, description in STUB_SCENARIOS.items()]
+
+
+def current_project_baseline(root: Path) -> dict[str, object]:
+    """Return the active engineering baseline this Agent is trained for."""
+
+    material_root = root / "data" / "materials"
+    benchmark_root = root / "data" / "benchmark"
+    chunk_path = root / "data" / "chunks" / "doc_chunks_v1.jsonl"
+    return {
+        "project": "EtherCAT Dynamic Profile / robot6 position mode / Fake Harness",
+        "hardware_required_for_agent_development": False,
+        "active_control_chain": [
+            "A53 parses XML/ESI",
+            "A53 emits JSON profile/topology",
+            "RPMsg sends profile/query/start/stop messages",
+            "M7 applies EtherCAT profile",
+            "M7 handles PDO pack/unpack",
+            "runtime_axis publishes axis state",
+        ],
+        "dynamic_runtime_facts": {
+            "parameter_base": "0x4100 + logical_axis",
+            "output_gate": "0x41F1",
+            "gate_rule": "dynamic control writes are blocked until the gate is explicitly unlocked",
+        },
+        "supported_single_drive_baseline": [
+            {"driver": "inovance_sv660n", "layout": "fixed_layout", "ob": 7, "ib": 13},
+            {"driver": "kinco_fd", "layout": "remap", "ob": 7, "ib": 13},
+            {"driver": "yako_ms", "layout": "remap", "ob": 7, "ib": 13},
+        ],
+        "robot6_baseline": {
+            "driver": "inovance_sv660n",
+            "axis1_slave2": "12/28 position variant",
+            "other_axes": "19/13 baseline",
+            "validated_motion_mode": "position mode",
+            "validated_matrix": ["single-axis", "dual-axis", "triple-axis", "six-axis +200 dec"],
+        },
+        "offline_agent_work": [
+            "maintain material index and current baseline notes",
+            "improve RAG direct answers and citation ranking",
+            "extend benchmark knowledge/log/safety cases",
+            "run fake harness/replay/XML regression summaries as offline evidence",
+            "refresh chunks and run local checks",
+        ],
+        "requires_board_or_robot": [
+            "real RPMsg/EtherCAT query/start/stop verification",
+            "M7 firmware deployment or remoteproc lifecycle validation",
+            "0x86 control word, 0x41F1 unlock, robot motion, IO output",
+            "new real report capture from robot or IO hardware",
+        ],
+        "canonical_files": {
+            "material_index": str(material_root / "material_index_v1.md"),
+            "current_baseline": str(material_root / "current_ethercat_dynamic_profile_project_v1.md"),
+            "benchmark": str(benchmark_root / "benchmark_v1.jsonl"),
+            "chunks": str(chunk_path),
+        },
+        "canonical_files_present": {
+            "material_index": (material_root / "material_index_v1.md").exists(),
+            "current_baseline": (material_root / "current_ethercat_dynamic_profile_project_v1.md").exists(),
+            "benchmark": (benchmark_root / "benchmark_v1.jsonl").exists(),
+            "chunks": chunk_path.exists(),
+        },
+        "recommended_offline_checks": [
+            "python -m industrial_embedded_dev_agent chunks build",
+            "python -m industrial_embedded_dev_agent benchmark run --engine rules",
+            "python -m industrial_embedded_dev_agent benchmark run --engine rag --type knowledge_qa",
+            "python -m industrial_embedded_dev_agent check --include-offline --include-rag --rag-type tool_safety",
+        ],
+    }
 
 
 def inspect_wsl_environment(root: Path) -> dict[str, object]:
@@ -220,7 +288,7 @@ def prepare_real_bench_package(
     doctor_snapshot_path.write_text(json.dumps(doctor_snapshot_payload, ensure_ascii=False, indent=2), encoding="utf-8")
     written_files.append(str(doctor_snapshot_path))
 
-    seed_request = "先读一下 axis0/axis1 的状态字、错误码和编码器，我要看当前链路是不是还活着。"
+    seed_request = "先只读 query 当前 dynamic profile，采集六轴状态字、错误码和 actual_position，确认链路是不是还活着。"
     plan_seed_path = destination / "plan_seed.json"
     plan_seed_payload = {
         "session_id": resolved_session_id,
@@ -1745,11 +1813,11 @@ def _tool_plan_reason(
     mode_note = f" Current execution mode: {current_mode}."
 
     if tool.tool_id == "SCRIPT-004" and any(token in request for token in READONLY_TOKENS):
-        return "Matched SCRIPT-004 because this is a read-only collection request for statusword / error code / encoder." + mode_note
+        return "Matched SCRIPT-004 because this is a read-only collection request for statusword / error code / actual_position." + mode_note
     if tool.tool_id == "SCRIPT-004" and (
         any(token in normalized for token in ["heartbeat", "snapshot"]) or any(token in request for token in SNAPSHOT_TOKENS)
     ):
-        return "Matched SCRIPT-004 because it is the low-risk snapshot tool for heartbeat and axis-state collection." + mode_note
+        return "Matched SCRIPT-004 because it is the low-risk snapshot tool for profile query, replay, and axis-state collection." + mode_note
     if allowed_to_execute:
         return f"Matched {tool.tool_id} because it stays within the {effective_risk} boundary and fits the current request." + mode_note
     if requires_confirmation:
@@ -1852,7 +1920,7 @@ def _effective_tool_summary(request: str, diagnosis, tool: ToolSpec) -> str:
     if tool.tool_id == "SCRIPT-004" and (
         "heartbeat" in normalized or "snapshot" in normalized or any(token in request for token in SNAPSHOT_TOKENS)
     ):
-        return "这是低风险状态采集请求，适合先跑状态快照和 heartbeat 采集，再汇总结论。"
+        return "这是低风险状态采集请求，适合先跑状态快照、profile query 或离线 replay 汇总，再汇总结论。"
     return diagnosis.summary
 
 
@@ -1917,7 +1985,7 @@ def _parse_probe_can_heartbeat(stdout: str, stderr: str, returncode: int | None)
         )
 
     next_action = (
-        "The transport looks readable. Next, compare these snapshots against vendor-tool or SDO readback on the real bench."
+        "The transport looks readable. Next, compare these snapshots against dynamic profile query and the stable report baseline."
         if chain_ok and axes
         else "Re-check the WSL transport path and runtime setup before treating this as a valid bench snapshot."
     )
@@ -2023,8 +2091,8 @@ def _render_real_bench_index(
         "```powershell",
         "python -m industrial_embedded_dev_agent tools use-real",
         "python -m industrial_embedded_dev_agent tools doctor",
-        "python -m industrial_embedded_dev_agent tools plan \"先读一下 axis0/axis1 的状态字、错误码和编码器，我要看当前链路是不是还活着。\"",
-        "python -m industrial_embedded_dev_agent tools run \"先读一下 axis0/axis1 的状态字、错误码和编码器，我要看当前链路是不是还活着。\" --execute",
+        "python -m industrial_embedded_dev_agent tools plan \"先只读 query 当前 dynamic profile，采集六轴状态字、错误码和 actual_position，确认链路是不是还活着。\"",
+        "python -m industrial_embedded_dev_agent tools run \"先只读 query 当前 dynamic profile，采集六轴状态字、错误码和 actual_position，确认链路是不是还活着。\" --execute",
         "```",
         "",
         "The same first-step commands are also stored in `plan_seed.json` for machine-readable reuse.",
@@ -3603,8 +3671,8 @@ def _render_first_run_template(pack: dict[str, object]) -> str:
             "",
             "## Follow-Up",
             "",
-            "- Vendor tool comparison:",
-            "- SDO / object dictionary comparison:",
+            "- Vendor/profile query comparison:",
+            "- Dynamic profile / runtime query comparison:",
             "- Additional notes:",
             "",
         ]

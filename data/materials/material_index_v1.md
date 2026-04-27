@@ -1,85 +1,77 @@
-# Industrial Embedded Dev Agent 准备产物：真实材料整理
+# Industrial Embedded Dev Agent 真实材料整理 V2
 
 ## 0. 说明
 
-- `Industrial Embedded Dev Agent_项目评估.txt` 中的外部链接为 ChatGPT 分享页：`https://chatgpt.com/s/t_69d069c95b748191bffafd2f50b5d425`
-- 当前环境下只能读取到页面标题“工业嵌入式开发Agent”，无法直接取回完整正文，因此本次准备工作主要基于本地方案文档和资料目录完成。
-- 本清单优先选择与 V1 目标最相关的三类问题域：启动/上板、构建/部署、CANopen/伺服联调。
+- 当前训练资料主线已经从双驱 CANopen 切换为 EtherCAT Dynamic Profile、汇川六轴 robot6 位置模式联调、动态 runtime 接管和 fake harness 离线回归。
+- 早期 CANopen 双驱资料保留在历史资料中，但不再作为 V1 Agent 的主要训练基线。
+- 当前资料优先服务四类问题域：profile/PDO/拓扑解释、robot6 位置模式回归、fake harness 离线验证、M7/RPMsg/EtherCAT 生命周期安全边界。
 
-## 1. 已整理的 10 份调试文档
+## 1. 已整理的核心文档
 
 | ID | 文档 | 类型 | 主题 | 价值 |
 |---|---|---|---|---|
-| DOC-001 | `资料/TLIMX8MP-EVM 评估板学习过程/TLIMX8MP-EVM_上手指南.docx` | docx | 平台上手、A53/M7 分工、RPMsg、EtherCAT、CANopen | 适合作为 V1 总体知识入口 |
-| DOC-002 | `资料/TLIMX8MP-EVM 评估板学习过程/TLIMX8MP-EVM_3月学习总结.docx` | docx | 3 月阶段成果、链路打通情况、未决问题 | 适合作为阶段性复盘与 case 来源 |
-| DOC-003 | `资料/TLIMX8MP-EVM 评估板学习过程/3月学习过程.docx` | docx | 具体踩坑、解决动作、环境问题 | 适合作为“历史问题 case”种子 |
-| DOC-004 | `资料/3-用户手册/1-1-调试工具安装.pdf` | pdf | 调试工具、串口/环境准备 | 适合作为上手与环境排查知识 |
-| DOC-005 | `资料/3-用户手册/1-2-Linux开发环境搭建.pdf` | pdf | Linux 开发环境搭建 | 适合作为构建链路排查知识 |
-| DOC-006 | `资料/3-用户手册/2-1-评估板测试手册.pdf` | pdf | 板级验证与测试流程 | 适合作为 bring-up 检查项来源 |
-| DOC-007 | `资料/3-用户手册/2-4-GDB程序调试方法说明.pdf` | pdf | GDB 调试流程 | 适合作为建议动作知识库 |
-| DOC-008 | `资料/3-用户手册/2-11-Linux-RT系统测试手册.pdf` | pdf | RT 场景测试 | 适合作为实时性问题背景文档 |
-| DOC-009 | `资料/3-用户手册/2-12-IgH EtherCAT主站开发案例.pdf` | pdf | EtherCAT 主站开发 | 适合作为总线联调知识源 |
-| DOC-010 | `资料/3-用户手册/3-1-Linux系统使用手册.pdf` | pdf | Linux 系统使用与运维 | 适合作为部署和系统服务类问题背景 |
-| DOC-011 | `data/materials/stub_scenario_cases_v1.md` | md | 无硬件 stub 场景、bench-pack 差异演练、session review 演练 | 适合作为 compare-pack / session bundle / 离线联调回归种子 |
+| CUR-001 | `data/materials/current_ethercat_dynamic_profile_project_v1.md` | md | 当前 EtherCAT 动态 profile 项目总览 | 当前训练基线入口 |
+| CUR-002 | `D:/桌面/test/mix_protocol/docs/dynamic_profile_test_chain.md` | md | XML/profile/单驱测试链路 | 单驱三厂商回归基线 |
+| CUR-003 | `D:/桌面/test/mix_protocol/docs/robot_memcpy_takeover_audit.md` | md | 旧 memcpy 路径和动态接管梳理 | 动态 runtime 覆盖旧链路的审计入口 |
+| CUR-004 | `D:/桌面/test/mix_protocol/docs/ethercat_fake_harness_design.md` | md | fake harness 设计 | 离线仿真架构与边界 |
+| CUR-005 | `D:/桌面/test/mix_protocol/docs/ethercat_fake_harness_manual.md` | md | fake harness 使用手册 | 回归命令和 report 解读 |
+| CUR-006 | `D:/桌面/test/mix_protocol/docs/m7_hot_reload_validation_result_2026-04-27.md` | md | M7 热重载验证结果 | remoteproc 风险结论 |
+| CUR-007 | `D:/桌面/test/mix_protocol/docs/io_hardware_return_test_playbook_2026-04-27.md` | md | IO 设备回归方案 | IO/焊接节点后续验证边界 |
+| CUR-008 | `docs/current_ethercat_agent_development_guide.md` | md | 当前 Agent 离线开发说明 | 无板开发边界、回归命令和硬件停止条件 |
 
-## 2. 已整理的 20 份日志样本
-
-> 说明：这里的“日志样本”按后续 benchmark 和分类训练的最小单元整理，不等同于 20 个原始文件。一个真实文件可以切分出多个可标注样本。
+## 2. 已整理的日志与报告样本
 
 | ID | 来源 | 场景 | 样本摘要 |
 |---|---|---|---|
-| LOG-001 | `资料/imxSoem-motion-control/build_latest.log` | WSL 构建 | WSL `localhost`/NAT 提示异常，说明 Windows/WSL 互通存在噪声 |
-| LOG-002 | `资料/imxSoem-motion-control/build_latest.log` | CMake 配置 | `project()` 应先于 `enable_language()` 的 CMake Warning |
-| LOG-003 | `资料/imxSoem-motion-control/build_latest.log` | 编译质量 | `nicdrv.c: warning: variable 'lp' set but not used` |
-| LOG-004 | `资料/imxSoem-motion-control/build_latest.log` | 编译质量 | `weld_current.c: warning: unused variable 'down_time'` |
-| LOG-005 | `资料/imxSoem-motion-control/build_latest.log` | 编译质量 | `weld_parameter.c: warning: function defined but not used` |
-| LOG-006 | `资料/imxSoem-motion-control/build_latest.log` | 编译质量 | `libtpr20pro.c: warning: unused variable 'd5'` |
-| LOG-007 | `资料/imxSoem-motion-control/build_latest.log` | RPMsg 链路 | `rpmsg_loop.c: variable 'result' set but not used` |
-| LOG-008 | `资料/imxSoem-motion-control/build_latest.log` | EtherCAT 主循环 | `ethercat_loop.c: warning: 'wkc' set but not used` |
-| LOG-009 | `资料/imxSoem-motion-control/build_latest.log` | EtherCAT 主循环 | `simpletest_1`/`csp_setup_1` 未使用，提示实验代码未清理 |
-| LOG-010 | `资料/imxSoem-motion-control/build_latest.log` | 构建上下文 | `Building ddr_release`，可作为 DDR 版编译成功上下文样本 |
-| LOG-011 | `资料/TLIMX8MP-EVM 评估板学习过程/3月学习过程.docx` | 串口调试 | 同一份代码第二天 RS232 UART3 不打印信息 |
-| LOG-012 | `资料/TLIMX8MP-EVM 评估板学习过程/3月学习过程.docx` | 镜像部署 | BOOT 区放入新 `m7_app.bin` 后仍运行旧镜像 |
-| LOG-013 | `资料/TLIMX8MP-EVM 评估板学习过程/3月学习过程.docx` | DDR/TCM 选择 | TCM 版本 boot 区空间不足导致代码溢出，改走 DDR |
-| LOG-014 | `资料/TLIMX8MP-EVM 评估板学习过程/3月学习过程.docx` | RPC 触发链路 | `ethercat_loop_task` 因等待 A 核命令无法进入 |
-| LOG-015 | `资料/TLIMX8MP-EVM 评估板学习过程/3月学习过程.docx` | 新工程构建 | 新 SDK 工程 DDR 版本无法跑通，原因是未选 `ddr_release Default` |
-| LOG-016 | `资料/imxSoem-motion-control/tmp_worklog_2026_04_01/word/document.xml` | CANopen 参数验证 | 通过 SDO 读取 `0x6041/0x6064/0x606C/0x6061` 做对象字典诊断 |
-| LOG-017 | `资料/imxSoem-motion-control/tmp_worklog_2026_04_01/word/document.xml` | 无串口回归 | 增加 `verify_robot_motion.py` + `build_deploy_verify_robot_no_serial.ps1` 做 SSH 验证 |
-| LOG-018 | `资料/imxSoem-motion-control/tmp_worklog_2026_04_01/word/document.xml` | RPDO2 联调 | 发送 `RPDO2` 数据后稳定复现 `statusCode=21559 (0x5437)` |
-| LOG-019 | `资料/imxSoem-motion-control/tmp_worklog_2026_04_03/word/document.xml` | 双轴联调 | `axis1/node2` 可恢复到可运行状态，编码器持续变化 |
-| LOG-020 | `资料/imxSoem-motion-control/tmp_worklog_2026_04_03/word/document.xml` | 参数未锁存 | `axis0/node1` 中 `0x6083/0x6084` 保持旧值、`0x60FF` 保持 0，目标速度未真正写入 |
+| LOG-001 | `tools/generated/board_reports/20260423_141425_inovance.json` | 汇川单驱 | SV660N 单驱动态 profile 链路通过，`ob=7`，`ib=13` |
+| LOG-002 | `tools/generated/board_reports/20260423_142131_kinco.json` | 步科单驱 | Kinco FD remap profile 链路通过，`ob=7`，`ib=13` |
+| LOG-003 | `tools/generated/board_reports/20260423_140443_yako.json` | YAKO 单驱 | YAKO MS remap profile 链路通过，`ob=7`，`ib=13` |
+| LOG-004 | `tools/generated/inovance_robot6_observed_topology_profile.json` | robot6 topology | 六个 SV660N 从站拓扑，axis1/slave2 为 `12/28` 位置型变体 |
+| LOG-005 | `tools/generated/dynamic_axis_probe_axis5_position_cw86_v2.json` | 单轴位置模式 | axis5 低风险轴位置模式回归通过 |
+| LOG-006 | `tools/generated/dynamic_axis_probe_axis0_position_cw86_v1.json` | 单轴位置模式 | axis0 位置模式回归通过，低速小步长验证 |
+| LOG-007 | `tools/generated/dynamic_dual_axis_probe_axis5_axis4_position_v1.json` | 双轴位置模式 | axis5+axis4 位置联调通过 |
+| LOG-008 | `tools/generated/dynamic_dual_axis_probe_axis1_axis0_position_v2.json` | 双轴位置模式 | axis1+axis0 位置联调通过 |
+| LOG-009 | `tools/generated/dynamic_triple_axis_probe_axis5_axis4_axis3_position_v2.json` | 三轴位置模式 | axis5+axis4+axis3 位置联调通过 |
+| LOG-010 | `tools/generated/dynamic_triple_axis_probe_axis2_axis1_axis0_position_v1.json` | 三轴位置模式 | axis2+axis1+axis0 位置联调通过 |
+| LOG-011 | `tools/generated/dynamic_six_axis_position_probe_v1.json` | 六轴位置模式 | 六轴同时 `+200 dec` 位置模式联调通过 |
+| LOG-012 | `tools/generated/fake_ecat_harness_regression_latest.json` | fake matrix | 14 个 fake harness 场景通过 |
+| LOG-013 | `tools/generated/fake_ecat_harness_xml_regression_latest.json` | XML batch | 汇川、步科、YAKO XML 样本批量回归通过 |
+| LOG-014 | `tools/generated/fake_ecat_harness_replay_batch_latest.json` | replay batch | 15 个真实 report replay case 通过 |
+| LOG-015 | `tools/generated/dynamic_runtime_acceptance/20260427_140030/dynamic_runtime_acceptance.json` | 接管准备 | stop/start、IO 只读、IO dry-run 对照形成阶段性验收 |
 
-## 3. 已整理的 10 个历史问题 case
+## 3. 已整理的历史问题 case
 
 | ID | 问题现象 | 初步归因 | 已验证动作 | 建议标签 |
 |---|---|---|---|---|
-| CASE-001 | RS232 UART3 第二天不打印信息 | 物理连接/串口工具配置漂移 | 重新插拔 RS232，重新设置 MobaXterm | `serial_no_output` |
-| CASE-002 | 新 `m7_app.bin` 放入 BOOT 区后仍运行旧程序 | 部署缓存/未完全重启 | 重启终端软件，重新拷贝，开关机重启板卡 | `stale_boot_artifact` |
-| CASE-003 | TCM 版本工程容易溢出 | TCM 启动区空间不足 | 改用 DDR 版本镜像 | `memory_layout_mismatch` |
-| CASE-004 | `ethercat_loop_task` 无法进入 | 依赖 A 核命令触发，链路未就绪 | 将函数提到判断前直接运行调试 | `rpc_trigger_missing` |
-| CASE-005 | 新 SDK 工程 DDR 跑不通 | 构建配置选错 | 勾选 `ddr_release Default` | `build_profile_mismatch` |
-| CASE-006 | `axis0/node1` 进入速度模式但电机不转 | `0x6083/0x6084/0x60FF` 未真正锁入驱动器 | SDO 强制写入、最小化隔离测试 | `canopen_param_not_latched` |
-| CASE-007 | `axis1/node2` 可以正常运行，`axis0/node1` 不稳定 | 双轴行为差异，说明问题更像业务链路或参数来源差异 | 单轴/双轴对比、对象字典回读 | `axis_asymmetry` |
-| CASE-008 | `RPDO2` 一旦发数据就复现 `0x5437` | PDO 在线更新触发驱动器异常 | 阶段性只保留 RPDO2 映射，不在线下发该数据 | `pdo_online_update_risk` |
-| CASE-009 | COM3 不可用时难以持续联调 | 调试链路过度依赖串口 | 引入 SSH 无串口验证脚本 | `serial_dependency` |
-| CASE-010 | 编译链路出现大量 warning | 实验代码未清理、变量未使用、链路脏数据 | 用 build log 做静态样本清洗与质量门禁 | `build_hygiene_issue` |
-| CASE-011 | `axis1_fault` 场景下 axis1 返回 `errorCode=16/statusCode=144/axisStatus=9473`，axis0 保持正常 | 单轴异常快照与稳定轴形成对照，可用于验证 compare-pack 和 issue capture | 运行 `bench-pack` 并与 nominal 基线做 `compare-pack` | `stub_single_axis_fault` |
-| CASE-012 | `encoder_stall` 场景下 transport 可读，但多轮 poll 中 encoder 读数保持不变 | 链路仍可读但反馈停滞，适合演练“链路活着但反馈异常” | 保留前后两包并重点比对 encoder 字段 | `stub_encoder_stall` |
-| CASE-013 | `open_rpmsg_fail` 场景下 `OpenRpmsg=-1`，后续读数退化 | 更接近 RPMsg/握手初始化问题，而不是普通只读快照 | 优先执行 `probe_rpmsg_handshake` 风格检查，再决定是否继续采样 | `stub_transport_degraded` |
+| CASE-001 | profile loaded 但 applied=0 | profile apply 失败或字段不完整 | fake harness `applied_failed` 场景覆盖 | `profile_schema_mismatch` |
+| CASE-002 | query 显示 slaves=0 | EtherCAT 从站未识别或总线未进入有效扫描 | fake harness `slaves_zero` 场景覆盖 | `slaves_zero` |
+| CASE-003 | inOP=0 或 task=0 | 总线未进入 OP 或 M7 EtherCAT task 未运行 | query/stop/start 稳定性检查 | `not_in_op` |
+| CASE-004 | actual_position 不变化 | 动作被拦截、未运行或反馈未更新 | `no_motion` 场景和 report 对比 | `no_motion_feedback` |
+| CASE-005 | 0x41F1 未解锁时动作被拦截 | 动态输出门控生效 | `gate_locked` 场景通过 | `gate_locked` |
+| CASE-006 | axis1/slave2 与其他轴 ob/ib 不同 | robot6 中 axis1 是 `12/28` 位置型变体 | 单独写入真实 topology/profile 并对照 | `pdo_ob_ib_mismatch` |
+| CASE-007 | stop-bus -> start-bus 偶发卡死 | M7 EtherCAT task、RPMsg endpoint 或网口状态未清理 | 固化 RPMsg 清理和 stop/start 回归 | `rpmsg_endpoint_stale` |
+| CASE-008 | remoteproc 热重载 DDR ELF 失败 | ELF/linker 不兼容 Linux remoteproc loader | 记录 `bad phdr da 0x80000000`，回到 .bin + reboot | `remoteproc_elf_incompatible` |
+| CASE-009 | IO 节点无法真实输出验证 | 机器人/IO 设备被同事占用或缺少真实设备窗口 | 先做只读 profile 和 dry-run 对照 | `io_hardware_unavailable` |
+| CASE-010 | 旧 memcpy 与动态 runtime 并存 | 动态链路尚未完全接管旧链路 | 先只读并行对照，再逐项切换输出 | `runtime_takeover_pending` |
 
-## 4. 已整理的 5 个常用脚本
+## 4. 已整理的工具与脚本
 
 | ID | 脚本 | 路径 | 作用 |
 |---|---|---|---|
-| SCRIPT-001 | `tmp_axis1_delay_probe.py` | `资料/imxSoem-motion-control/tmp_axis1_delay_probe.py` | 对 axis1 执行速度模式下发并轮询编码器/状态/错误码 |
-| SCRIPT-002 | `tmp_axis_command_and_probe.py` | `资料/imxSoem-motion-control/tmp_axis_command_and_probe.py` | 同时给双轴下发命令并读取 AType、使能、状态、编码器 |
-| SCRIPT-003 | `tmp_axis_probe.py` | `资料/imxSoem-motion-control/tmp_axis_probe.py` | 单轴探针，验证 `SetTargetVel/SetAccel/SetDecel` 后反馈变化 |
-| SCRIPT-004 | `tmp_probe_can_heartbeat.py` | `资料/imxSoem-motion-control/tmp_probe_can_heartbeat.py` | 只读式 CAN/轴状态快照采集，适合低风险巡检 |
-| SCRIPT-005 | `tmp_verify_acc_dec.py` | `资料/imxSoem-motion-control/tmp_verify_acc_dec.py` | 验证 Acc/Dec/状态码/编码器变化，适合定位参数是否锁存 |
+| SCRIPT-001 | `xml_to_ec_profile.py` | `D:/桌面/test/mix_protocol/tools/xml_to_ec_profile.py` | 从 XML/ESI 生成 JSON profile |
+| SCRIPT-002 | `a53_send_ec_profile` | `D:/桌面/test/mix_protocol/tools/a53_send_ec_profile.cpp` | A53 侧 profile 下发和 query/start/stop 入口 |
+| SCRIPT-003 | `robot_single_axis_dynamic_position_probe.py` | `D:/桌面/test/mix_protocol/tools/robot_single_axis_dynamic_position_probe.py` | robot6 单轴位置模式验证 |
+| SCRIPT-004 | `robot_dual_axis_dynamic_position_probe.py` | `D:/桌面/test/mix_protocol/tools/robot_dual_axis_dynamic_position_probe.py` | robot6 双轴位置模式验证 |
+| SCRIPT-005 | `robot_triple_axis_dynamic_position_probe.py` | `D:/桌面/test/mix_protocol/tools/robot_triple_axis_dynamic_position_probe.py` | robot6 三轴位置模式验证 |
+| SCRIPT-006 | `robot_six_axis_dynamic_position_probe.py` | `D:/桌面/test/mix_protocol/tools/robot_six_axis_dynamic_position_probe.py` | robot6 六轴位置模式验证 |
+| SCRIPT-007 | `fake_ecat_harness.py` | `D:/桌面/test/mix_protocol/tools/fake_ecat_harness/fake_ecat_harness.py` | 离线 fake M7/fake EtherCAT report 生成 |
+| SCRIPT-008 | `run_fake_harness_regression.py` | `D:/桌面/test/mix_protocol/tools/fake_ecat_harness/run_fake_harness_regression.py` | fake matrix 一键回归 |
+| SCRIPT-009 | `run_xml_profile_batch_regression.py` | `D:/桌面/test/mix_protocol/tools/fake_ecat_harness/run_xml_profile_batch_regression.py` | XML 真实样本批量回归 |
+| SCRIPT-010 | `run_replay_batch.py` | `D:/桌面/test/mix_protocol/tools/fake_ecat_harness/run_replay_batch.py` | 真实 report replay 批量回归 |
 
 ## 5. 建议的后续入库方式
 
-1. 文档优先入库 `DOC-001` ~ `DOC-010`，因为它们最接近知识问答需求。
-2. 日志优先按 `LOG-011` ~ `LOG-020` 做高价值标注，这些更像真实联调问题，不只是编译 warning。
-3. case 优先按 `CASE-006` ~ `CASE-009` 做标准化复盘，因为它们最能体现“工业味道”。
-4. 脚本优先对白名单化 `SCRIPT-002` 和 `SCRIPT-004`，它们更接近后续 L0/L1 工具调用能力。
+1. 新增真实机器人测试结果时，优先追加到 `LOG-*` 和 replay case。
+2. 新增 XML/ESI 样本时，必须补 XML batch regression 和 fake harness scenario。
+3. 新增 IO/焊接节点时，先补只读 profile 描述，再补 dry-run 对照，最后等设备窗口做真实输出验证。
+4. 新增高风险动作样本时，优先补 `tool_safety` benchmark，确保 Agent 默认不会自动执行。

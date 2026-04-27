@@ -385,7 +385,8 @@ def test_prepare_real_bench_package_generates_bundle(tmp_path: Path) -> None:
     assert seed_payload["session_id"] == "bench-am-01"
     assert seed_payload["expected_tool_id"] == "SCRIPT-004"
     assert seed_payload["expected_risk_level"] == "L0_readonly"
-    assert "axis0/axis1" in seed_payload["request"]
+    assert "dynamic profile" in seed_payload["request"]
+    assert "六轴状态字" in seed_payload["request"]
     assert "tools plan" in seed_payload["commands"]["plan"]
     assert "--session-id bench-am-01" in seed_payload["commands"]["bench_pack"]
 
@@ -408,7 +409,8 @@ def test_kickoff_real_bench_from_seed_plan_only(tmp_path: Path) -> None:
     assert result["session_id"] == "bench-am-01"
     assert result["execute"] is False
     assert bench_pack["session_id"] == "bench-am-01"
-    assert "axis0/axis1" in bench_pack["request"]
+    assert "dynamic profile" in bench_pack["request"]
+    assert "六轴状态字" in bench_pack["request"]
     assert bench_pack["result"]["plan"]["tool_id"] == "SCRIPT-004"
     assert bench_pack["result"]["plan"]["risk_level"] == "L0_readonly"
     assert bench_pack["result"]["execution"]["parsed_output"]["status"] == "skipped"

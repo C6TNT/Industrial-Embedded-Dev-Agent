@@ -56,7 +56,7 @@ python -m industrial_embedded_dev_agent tools plan "<read-only axis status reque
 Suggested request text:
 
 ```text
-Read axis0/axis1 statusword, error code, and encoder values so I can confirm the link is alive.
+Read the current dynamic profile query plus six-axis statusword, error code, and actual_position so I can confirm the link is alive.
 ```
 
 Observed result:
@@ -106,7 +106,7 @@ Observed result:
 - stderr path or pasted excerpt:
 - parsed JSON path or pasted excerpt:
 - vendor tool screenshot path:
-- SDO readback notes path:
+- dynamic profile / query comparison notes path:
 
 ## Cross-Check
 
@@ -115,10 +115,11 @@ Observed result:
 - Does vendor-tool state match script readback?
 - If not, what mismatches exist?
 
-### SDO / Object Dictionary Comparison
+### Dynamic Profile / Runtime Query Comparison
 
-- Which objects were checked?
-- Did the values match the script output?
+- Which profile/query fields were checked?
+- Did `loaded/applied/slaves/inOP/task/ob/ib` match the expected runtime baseline?
+- Did six-axis statusword, error code, and actual_position match the script output?
 - Any suspicious differences?
 
 ## First Conclusion

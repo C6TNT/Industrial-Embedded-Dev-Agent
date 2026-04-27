@@ -7,7 +7,7 @@
 - 能结合历史 case 做问题复盘
 - 能在风险边界内调用工具、执行脚本、辅助调试
 
-当前仓库以 `i.MX8MP + RPMsg + CANopen / 伺服联调` 场景为核心，已经完成了第一轮资料整理、标签设计、benchmark 种子构建，以及 GitHub 开源前的仓库瘦身与历史清理。
+当前仓库以 `i.MX8MP A53 + RPMsg + M7 + EtherCAT Dynamic Profile / robot6 位置模式 / Fake Harness` 场景为核心，训练资料已经从早期双驱 CANopen 切换到当前动态 profile 项目主线。
 
 ## 项目目标
 
@@ -26,9 +26,9 @@
 当前仓库已经完成：
 
 - 项目方案整理
-- 第一轮真实材料整理
-- 标签体系初稿
-- benchmark 初稿
+- 当前 EtherCAT 动态 profile 真实材料整理
+- 标签体系 V2：profile、PDO、robot6、fake harness、M7/RPMsg 生命周期、安全边界
+- benchmark V2：知识问答、日志归因、工具安全边界
 - 开源仓库结构清理
 - 大文件与 Demo 历史瘦身
 
@@ -48,13 +48,13 @@
   开工前准备好的核心资产。
 
 - `准备产物/真实材料整理.md`
-  第一轮真实材料清单，覆盖调试文档、日志样本、历史问题 case、常用脚本。
+  当前真实材料清单，覆盖 EtherCAT 动态 profile、robot6 位置模式、fake harness、M7/RPMsg 生命周期。
 
 - `准备产物/标签体系_v1.md`
-  标签体系初稿，包含问题大类、原因标签、建议动作标签、风险等级标签。
+  标签体系，包含 profile/PDO/robot6/fake harness/runtime takeover/安全边界等标签。
 
 - `准备产物/benchmark_v1.jsonl`
-  benchmark 种子集，包含知识问答、日志归因、工具调用安全测试。
+  benchmark 种子集，包含当前动态 profile 主线的知识问答、日志归因、工具调用安全测试。
 
 - `资料/`
   当前保留在仓库中的公开工程资料、代码样例和部分项目上下文。
@@ -62,16 +62,19 @@
 - `仓库整理说明.md`
   仓库瘦身策略、大文件处理边界、开源整理说明。
 
+- `docs/current_ethercat_agent_development_guide.md`
+  当前 EtherCAT Dynamic Profile Agent 的离线开发说明、硬件边界和回归命令。
+
 ## 已准备的种子资产
 
 当前已经落好的准备工作包括：
 
-- 10 份调试文档
-- 20 份日志样本
+- 7 份当前主线文档入口
+- 15 份真实日志/报告样本
 - 10 个历史问题 case
-- 5 个常用脚本
-- 1 套标签体系初稿
-- 1 版 benchmark 初稿
+- 10 个常用脚本/工具入口
+- 1 套标签体系 V2
+- 1 版 benchmark V2
 
 这部分内容主要放在：
 
@@ -98,9 +101,9 @@
 
 在后续开始搭 Agent 原型时，可以直接用 `准备产物/benchmark_v1.jsonl` 做最小可用评测：
 
-- 知识问答是否答得对
-- 日志归因是否抓得到关键线索
-- 工具调用是否满足安全边界
+- profile/PDO/topology 知识问答是否答得对
+- robot6、RPMsg、M7 部署、fake harness 日志归因是否抓得到关键线索
+- 0x86、0x41F1、机器人运动、IO 输出、固件切换等工具调用是否满足安全边界
 
 ### 3. 用标签体系约束输出结构
 
@@ -115,7 +118,7 @@
 
 ### 4. 持续扩充真实工业材料
 
-后续每新增一份调试记录、日志样本、历史故障 case，都建议同步做三件事：
+后续每新增一份调试记录、日志样本、真实 report 或 replay case，都建议同步做三件事：
 
 - 归档原始材料
 - 打标签

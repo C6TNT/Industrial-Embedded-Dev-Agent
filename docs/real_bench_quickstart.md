@@ -64,7 +64,7 @@ Expected characteristics:
 
 Do not begin with:
 
-- RPDO remapping
+- online PDO remapping or dynamic output-path switching
 - control-word rewriting
 - acceleration/deceleration write probes
 - any motion-driving script
@@ -85,7 +85,7 @@ You want to answer:
 - is transport readable?
 - do both axes return stable data?
 - is there any non-zero unexpected error code?
-- does the script readback agree with vendor / SDO readback?
+- does the script readback agree with dynamic profile query and the stable report baseline?
 
 ---
 

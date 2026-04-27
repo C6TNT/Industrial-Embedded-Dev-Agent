@@ -96,7 +96,7 @@ Observed symptom:
 - stderr excerpt:
 - parsed JSON excerpt:
 - vendor tool screenshot:
-- SDO readback notes:
+- dynamic profile query notes:
 - oscilloscope / bus capture path:
 
 ## 8. Mismatch Check
@@ -108,7 +108,7 @@ If there was a mismatch, write it explicitly.
 - Match or mismatch:
 - Details:
 
-### Script vs SDO Readback
+### Script vs Dynamic Runtime Readback
 
 - Match or mismatch:
 - Details:
@@ -175,7 +175,7 @@ Pick the next action that reduces uncertainty with the least additional risk.
 - continue with read-only validation
 - fix environment first
 - compare against vendor tool
-- compare against SDO/object dictionary
+- compare against dynamic profile/runtime readback
 - escalate for manual engineering review
 
 Selected next step:

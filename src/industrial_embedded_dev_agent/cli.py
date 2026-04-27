@@ -39,6 +39,7 @@ from .tools import (
     canonical_merge_report,
     canonical_patch_helper,
     canonical_merge_preview_bundle,
+    current_project_baseline,
     prepare_formal_merge_assistant,
     plan_pending_merge,
     plan_tool_request,
@@ -121,6 +122,7 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_subparsers = tools_parser.add_subparsers(dest="tools_command", required=True)
     tools_subparsers.add_parser("list", help="List registered tool specs")
     tools_subparsers.add_parser("stub-scenarios", help="List the available no-hardware stub scenarios")
+    tools_subparsers.add_parser("project-baseline", help="Show the active EtherCAT Dynamic Profile Agent baseline")
     tools_subparsers.add_parser("mode", help="Show the current WSL execution mode")
     tools_subparsers.add_parser("doctor", help="Inspect the local WSL execution environment")
     tools_prep_real_parser = tools_subparsers.add_parser("prep-real-bench", help="Generate a ready-to-fill real-bench prep pack with checklist and templates")
@@ -321,6 +323,9 @@ def main() -> None:
             return
         if args.tools_command == "stub-scenarios":
             _print_json(list_stub_scenarios())
+            return
+        if args.tools_command == "project-baseline":
+            _print_json(current_project_baseline(paths.root))
             return
         if args.tools_command == "mode":
             _print_json(get_execution_mode(paths.root))

@@ -563,8 +563,8 @@ def _render_first_run_template(pack: dict[str, object]) -> str:
             "",
             "## Follow-Up",
             "",
-            "- Vendor tool comparison:",
-            "- SDO / object dictionary comparison:",
+            "- Vendor/profile query comparison:",
+            "- Dynamic profile / runtime query comparison:",
             "- Additional notes:",
             "",
         ]
@@ -642,7 +642,7 @@ def _render_session_review_template(pack: dict[str, object]) -> str:
 
     confirmed_facts = _build_confirmed_facts(parsed, execution)
     blockers = _build_blockers(doctor, execution, parsed)
-    next_step = parsed.get("next_action", "Compare the current evidence pack against vendor-tool and SDO readback.")
+    next_step = parsed.get("next_action", "Compare the current evidence pack against dynamic profile query and the stable report baseline.")
 
     return "\n".join(
         [
@@ -673,8 +673,8 @@ def _render_session_review_template(pack: dict[str, object]) -> str:
             "",
             "## Unconfirmed Assumptions",
             "",
-            "- Vendor tool still needs to be compared against the script output.",
-            "- SDO / object-dictionary readback still needs to be compared against the script output.",
+            "- Dynamic profile query still needs to be compared against the script output.",
+            "- Stable robot6 report baseline still needs to be compared against the script output.",
             "- Bench-side safety state still needs explicit manual confirmation if this is a real run.",
             "",
             "## Key Evidence Produced",
@@ -748,7 +748,7 @@ def _build_blockers(doctor: dict[str, object], execution: dict[str, object], par
     if parsed.get("status") == "environment_error":
         blockers.append("Environment error is blocking bench validation.")
     if not blockers:
-        blockers.append("No hard blocker was extracted automatically; vendor / SDO comparison is still pending.")
+        blockers.append("No hard blocker was extracted automatically; dynamic profile query comparison is still pending.")
     return blockers
 
 
@@ -805,7 +805,7 @@ def _build_bundle_blockers(packs: list[dict[str, object]]) -> list[str]:
     ):
         blockers.append("This session includes at least one request outside the allowed execution boundary.")
     if not blockers:
-        blockers.append("No hard blocker was extracted automatically; vendor / SDO comparison is still pending.")
+        blockers.append("No hard blocker was extracted automatically; dynamic profile query comparison is still pending.")
     return blockers
 
 
@@ -817,7 +817,7 @@ def _build_bundle_next_steps(packs: list[dict[str, object]]) -> list[str]:
         if next_action and next_action not in steps:
             steps.append(next_action)
     if not steps:
-        steps.append("Compare the captured packs against vendor-tool and SDO readback.")
+        steps.append("Compare the captured packs against dynamic profile query and the stable report baseline.")
     return steps[:3]
 
 
