@@ -1,444 +1,126 @@
-# Industrial Embedded Dev Agent
+# Spindle
 
-一个面向工业嵌入式研发场景的 Agent 项目仓库，目标不是做“会说话的 demo”，而是做一个真正带工业味道的工程助手：
+Spindle 是一个面向工业嵌入式研发现场的工程 Agent 项目。名字取自主轴，强调它服务的核心场景：机器人、伺服、电机、运动控制、工业总线和真实调试链路。
 
-- 能回答工业嵌入式知识问题
-- 能看日志、做归因、给出排查建议
-- 能结合历史 case 做问题复盘
-- 能在风险边界内调用工具、执行脚本、辅助调试
+这个仓库当前围绕 `i.MX8MP A53 + RPMsg + M7 + EtherCAT Dynamic Profile / robot6 位置模式 / Fake Harness` 建立一套可落地的工程助手能力：资料检索、日志归因、工具安全边界、离线回归、报告沉淀和开发板只读诊断。
 
-当前仓库以 `i.MX8MP A53 + RPMsg + M7 + EtherCAT Dynamic Profile / robot6 位置模式 / Fake Harness` 场景为核心，训练资料已经从早期双驱 CANopen 切换到当前动态 profile 项目主线。
+## 当前定位
 
-## 项目目标
+Spindle 不是完整自治硬件控制系统，也不是重型知识库。它当前定位为 EtherCAT/机器人调试项目的研发副驾：
 
-这个项目希望逐步搭出一套适合工业现场研发与调试的 Agent 基础设施，重点覆盖：
+- 用 raw search、curated memory 和 benchmark 管理真实工程资料。
+- 用规则归因和 RAG 辅助分析 profile、PDO、RPMsg、M7、robot6、fake harness 等问题。
+- 用安全工具层区分 `offline_ok`、`board_required`、`robot_motion_required`、`io_required`、`firmware_required`。
+- 用 pre-push、secret-scan、pytest、benchmark 和 GSD offline gate 保持仓库可交付。
 
-- 工业嵌入式知识检索与问答
-- 日志理解、故障归因、风险判断
-- 历史问题复用与经验沉淀
-- 调试脚本、工具调用与安全约束
-- benchmark 驱动的持续评估
+## 能力概览
 
-一句话理解：这是一个面向真实工业研发链路的 Agent 项目，而不是单纯的大模型问答封装。
+- `material-status` / `material-search`：检索西厂工程资料、源码、文档、XML、profile、日志和工具脚本。
+- `project-status`：查看当前项目基线、benchmark、chunks、git 状态和硬件边界。
+- `draft-fact` / `material-draft-fact`：把新测试结论生成可审查材料草稿，避免直接污染 canonical 数据。
+- `import-report` / `summarize-fake-regression`：把真实 report 或 fake harness 回归结果沉淀成 LOG/replay/材料草稿。
+- `audit-hardware-action`：审计真实板卡、机器人、IO、固件相关动作，给出人工确认条件和低风险替代路径。
+- `board-status` / `rpmsg-health` / `m7-health` / `ethercat-query-readonly` / `board-report`：开发板只读诊断，默认 dry-run，`--execute` 才会 SSH。
+- `gsd-status` / `gsd-offline-run`：按 `.planning` 边界执行离线自动化检查。
 
-## 当前进度
+## 快速开始
 
-当前仓库已经完成：
+安装开发依赖：
 
-- 项目方案整理
-- 当前 EtherCAT 动态 profile 真实材料整理
-- 标签体系 V2：profile、PDO、robot6、fake harness、M7/RPMsg 生命周期、安全边界
-- benchmark V2：知识问答、日志归因、工具安全边界
-- 开源仓库结构清理
-- 大文件与 Demo 历史瘦身
-
-当前基线提交之后，仓库已经适合继续往 MVP 工程化方向推进。
-
-## 目录导览
-
-仓库当前主要内容如下：
-
-- `Industrial Embedded Dev Agent_项目方案.md`
-  项目方案、目标拆解、能力边界、阶段规划。
-
-- `Industrial Embedded Dev Agent_项目评估.txt`
-  外部评估入口，目前主要作为参考链接记录。
-
-- `准备产物/`
-  开工前准备好的核心资产。
-
-- `准备产物/真实材料整理.md`
-  当前真实材料清单，覆盖 EtherCAT 动态 profile、robot6 位置模式、fake harness、M7/RPMsg 生命周期。
-
-- `准备产物/标签体系_v1.md`
-  标签体系，包含 profile/PDO/robot6/fake harness/runtime takeover/安全边界等标签。
-
-- `准备产物/benchmark_v1.jsonl`
-  benchmark 种子集，包含当前动态 profile 主线的知识问答、日志归因、工具调用安全测试。
-
-- `资料/`
-  当前保留在仓库中的公开工程资料、代码样例和部分项目上下文。
-
-- `仓库整理说明.md`
-  仓库瘦身策略、大文件处理边界、开源整理说明。
-
-- `docs/current_ethercat_agent_development_guide.md`
-  当前 EtherCAT Dynamic Profile Agent 的离线开发说明、硬件边界和回归命令。
-
-## 已准备的种子资产
-
-当前已经落好的准备工作包括：
-
-- 7 份当前主线文档入口
-- 15 份真实日志/报告样本
-- 10 个历史问题 case
-- 10 个常用脚本/工具入口
-- 1 套标签体系 V2
-- 1 版 benchmark V2
-
-这部分内容主要放在：
-
-- `准备产物/真实材料整理.md`
-- `准备产物/标签体系_v1.md`
-- `准备产物/benchmark_v1.jsonl`
-
-## 使用方式
-
-当前仓库还处于“准备期 + 仓库基建期”，所以最适合的使用方式是：
-
-### 1. 先读方案和准备产物
-
-建议优先阅读：
-
-- `Industrial Embedded Dev Agent_项目方案.md`
-- `准备产物/真实材料整理.md`
-- `准备产物/标签体系_v1.md`
-- `准备产物/benchmark_v1.jsonl`
-
-这样可以最快理解项目目标、数据形态和下一阶段要做什么。
-
-### 2. 用 benchmark 作为第一版评测基线
-
-在后续开始搭 Agent 原型时，可以直接用 `准备产物/benchmark_v1.jsonl` 做最小可用评测：
-
-- profile/PDO/topology 知识问答是否答得对
-- robot6、RPMsg、M7 部署、fake harness 日志归因是否抓得到关键线索
-- 0x86、0x41F1、机器人运动、IO 输出、固件切换等工具调用是否满足安全边界
-
-### 3. 用标签体系约束输出结构
-
-无论后面接 RAG、接工具、还是做 case 检索，都建议优先对齐这套标签：
-
-- 问题大类
-- 原因标签
-- 建议动作标签
-- 风险等级标签
-
-这样可以避免 Agent 输出“像回答”，但不利于工程复用。
-
-### 4. 持续扩充真实工业材料
-
-后续每新增一份调试记录、日志样本、真实 report 或 replay case，都建议同步做三件事：
-
-- 归档原始材料
-- 打标签
-- 补 benchmark 或回归样例
-
-这样仓库会越用越像工业项目，而不是越做越像演示项目。
-
-### 5. 真机回工位前可先生成 bench 准备包
-
-如果你准备从离线 stub 回到真实工位，可以先生成一套 ready-to-fill 的真机资料包：
-
-```bash
-ieda tools prep-real-bench --session-id bench-am-01 --label "Morning bench"
+```powershell
+python -m pip install -e ".[dev]"
 ```
 
-它会在 `reports/real_bench_prep/<session_id>/` 下生成：
+查看项目状态：
 
-- `doctor_snapshot.json`
-- `plan_seed.json`
-- `00_index.md`
-- `01_readiness_checklist.md`
-- `02_first_run_record.md`
-- `03_issue_capture.md`
-- `04_session_review.md`
-
-这样回到工位后可以直接按顺序填，不用再手工整理模板。
-
-如果你想继续把这套准备包直接推进到“第一份只读证据包”，可以再执行：
-
-```bash
-ieda tools kickoff-real-bench "reports/real_bench_prep/<session_id>/plan_seed.json"
+```powershell
+spindle tools project-status
+spindle tools material-status
+spindle tools gsd-status
 ```
 
-默认会先生成一份 `plan-only` 的 seeded `bench-pack`。  
-如果你已经确认环境可读，也可以显式加 `--execute`。
+搜索工程资料：
 
-## 本地验证与 CI
-
-当前仓库已经接入了一套最小可用的本地回归与 GitHub Actions CI。
-
-### 本地建议先跑
-
-默认回归：
-
-```bash
-ieda check
+```powershell
+spindle tools material-search "0x41F1" --scope docs
+spindle tools material-search "axis1 12/28" --scope all
 ```
 
-这条命令会统一执行：
+运行本地门禁：
 
-- `pytest`
-- `rules benchmark`
-- `tool_safety benchmark`
-
-如果你想额外检查一部分 RAG 能力，可以再跑：
-
-```bash
-ieda check --include-rag --rag-type tool_safety
+```powershell
+spindle check --include-offline --include-rag --rag-type tool_safety
+spindle tools pre-push-check --include-offline --include-rag
 ```
 
-如果你想把固定的离线 stub 样例对比也一起纳入回归，可以再跑：
+发布前检查敏感信息：
 
-```bash
-ieda check --include-offline
+```powershell
+spindle tools secret-scan
 ```
 
-如果想做当前最完整的一组本地检查，可以直接跑：
+## 开发板只读诊断
 
-```bash
-ieda check --include-offline --include-rag --rag-type tool_safety
+开发板诊断默认只生成计划，不连接板卡：
+
+```powershell
+spindle tools board-status
+spindle tools rpmsg-health
+spindle tools m7-health
+spindle tools ethercat-query-readonly
+spindle tools board-report
 ```
 
-当前支持的 `--rag-type` 有：
+确认当前只有开发板只读窗口、不会影响机器人/IO/固件后，再显式加 `--execute`：
 
-- `knowledge_qa`
-- `log_attribution`
-- `tool_safety`
-
-### 远端 CI 当前会跑什么
-
-仓库当前已经拆成两层 GitHub Actions：
-
-- `Quick Check`
-  在 `push / pull_request` 时默认执行，运行：
-  `python -m industrial_embedded_dev_agent check`
-
-- `Full Check`
-  在 `main` 分支推送和手动触发时执行，运行：
-  `python -m industrial_embedded_dev_agent check`
-  `python -m industrial_embedded_dev_agent check --include-offline --include-rag --rag-type tool_safety`
-
-也就是说，日常提交先走轻量兜底，离线样例回归和重点 RAG 回归则放在单独的完整检查里。
-
-## 正式数据并入流程
-
-如果你已经完成了一轮 bench 候选生成，并希望把候选内容逐步推进到正式数据并入准备，可以按这条链走：
-
-```bash
-ieda tools review-finish-candidates --session-id <session-id>
-ieda tools promote-finish-candidates --session-id <session-id>
-ieda tools plan-pending-merge
-ieda tools prepare-formal-merge
-ieda tools apply-formal-merge --dry-run
-ieda tools apply-formal-merge --execute
-ieda tools canonical-merge-preflight
-ieda tools canonical-patch-helper
-ieda tools canonical-merge-preview
-ieda tools canonical-merge-report
-ieda tools canonical-merge-checklist
+```powershell
+spindle tools board-report --execute
 ```
 
-完整说明见：
+这条链路只允许 SSH 只读检查、RPMsg 设备/日志检查、M7 日志检查和 `a53_send_ec_profile --query`。它禁止 `start-bus`、`stop-bus`、`0x86`、`0x41F1`、机器人运动、IO 输出、remoteproc 生命周期和固件热重载。
 
-- `docs/real_bench_first_day_plan.md`
-- `docs/real_bench_quickstart.md`
-- `docs/candidate_quality_check_plan.md`
-- `docs/formal_merge_workflow.md`
-- `docs/formal_merge_quickstart.md`
-- `docs/manual_canonical_merge_guide.md`
-- `docs/real_bench_to_formal_merge_map.md`
+## 真实问题沉淀流程
 
-当前这条链仍然保持低风险：
+后续每次 EtherCAT/机器人项目出现新问题，按这个闭环处理：
 
-- 会生成候选审核、merge plan、append patch 建议
-- `--execute` 也只会写到 staging 目录
-- `canonical-merge-preflight` 只做只读预检
-- `canonical-patch-helper` 只生成 canonical patch bundle
-- `canonical-merge-preview` 只生成 merge 后效果预览
-- `canonical-merge-report` 只汇总 preflight / patch / preview 结果
-- `canonical-merge-checklist` 只生成最终人工审阅清单
-- 不会直接修改 `data/materials/`、`data/materials/material_index_v1.md`、`data/benchmark/benchmark_v1.jsonl`
+1. 用 `material-search` 或 `ask` 查原始资料和历史 case。
+2. 用 `audit-hardware-action` 判断是否跨越硬件边界。
+3. 能离线验证的先跑 fake harness、report import 或 board dry-run。
+4. 把真实 report 或测试结论用 `import-report`、`summarize-fake-regression`、`draft-fact` 生成草稿。
+5. 审查后再更新材料索引、benchmark、chunks 和回归样例。
 
-## 路线图
+当前策略是先累计 10-20 个真实使用 case，再决定是否进入 v1.1，例如更强的知识库、Agent SDK wrapper 或更复杂的自动执行层。
 
-### Phase 0：准备阶段
+## 安全边界
 
-- 整理真实工业材料
-- 定义标签体系
-- 写第一版 benchmark
-- 清理仓库，建立开源基线
+Spindle 默认只自动执行 `offline_ok` 工作。以下动作不能自动执行，只能生成计划、审计或清单：
 
-当前状态：已完成基础版本
+- 真实 `ssh/scp/reboot`。
+- `start-bus` / `stop-bus`。
+- `0x86` 控制字。
+- `0x41F1` 输出门控解锁。
+- 机器人运动。
+- IO、焊接、限位输出。
+- remoteproc 生命周期、固件烧写、M7 热重载。
 
-### Phase 1：MVP 工程骨架
+硬件动作统一先跑：
 
-- 定义数据目录结构
-- 规范 case / log / doc / script 存储方式
-- 搭建最小可运行的 Agent 项目结构
-- 接入一版基础检索和问答流程
+```powershell
+spindle tools audit-hardware-action "unlock 0x41F1 and move robot axis5"
+```
 
-### Phase 2：日志分析与归因能力
+## 文档
 
-- 加入日志解析和模式提取
-- 引入原因标签映射
-- 输出结构化归因结论
-- 建立错误案例回放与回归集
+- [Spindle 使用手册](docs/spindle_user_manual.md)
+- [项目路线图](docs/roadmap.md)
+- [GSD 自动化边界](.planning/GSD_BOUNDARY.md)
 
-### Phase 3：工具调用与安全边界
+## 当前状态
 
-- 为脚本和工具建立调用白名单
-- 接入风险等级判定
-- 明确可自动执行、需确认执行、禁止执行三类动作
-- 建立工具安全 benchmark
+Spindle 当前进入 v1.0 稳定期。短期目标不是继续堆功能，而是作为可展示工程交付到 GitHub，并在真实 EtherCAT/机器人项目中持续使用、记录和回归。
 
-### Phase 4：工业化增强
+推荐提交前门禁：
 
-- 引入历史问题检索
-- 融合知识问答、日志归因、工具链协同
-- 强化现场调试风格输出
-- 形成可持续迭代的数据闭环
-
-## 开源边界说明
-
-本仓库已经刻意移出一批不适合进入源码仓库的内容，例如：
-
-- 大型 Demo 资料包
-- 超大参考手册
-- 板卡上手原始资料大包
-- 重复中间工作区
-
-这些内容目前仍可能存在于本地工作区中，但不会继续作为开源仓库历史的一部分维护。
-
-详细说明见：
-
-- `仓库整理说明.md`
-
-## 许可证
-
-本仓库采用 MIT License。
-
-需要注意：
-
-- 仓库中的第三方资料、厂商手册、外部文档，如其版权归属不属于本项目，应以原始版权声明为准。
-- 若后续继续公开整理更多第三方材料，建议进一步补一份资料来源与版权边界说明。
-
-## 下一步建议
-
-如果继续推进，这个仓库下一阶段最值得做的事情是：
-
-1. 搭第一版 MVP 工程骨架
-2. 把 benchmark 扩成标准评测目录结构
-3. 为日志、case、脚本建立统一数据格式
-4. 逐步把“问答能力”升级成“可复用的工业调试工作流”
-
-## Formal Merge Gating Update
-
-当前 `candidate-quality-check -> review-finish-candidates -> promote-finish-candidates -> plan-pending-merge -> prepare/apply-formal-merge`
-已经形成了明确的自动分流规则。
-
-- `review-finish-candidates` 先产出 `review_recommendation`
-- `promote-finish-candidates` 再把它映射成 `next_step`
-- `plan-pending-merge` 只放行 `next_step = continue_to_pending_merge` 的 eligible 候选
-- `prepare-formal-merge` 只消费 eligible 候选
-- `apply-formal-merge` 会显式给出 `status / should_continue / deferred_candidates`
-
-当前支持的 `next_step` 包括：
-
-- `continue_to_pending_merge`
-- `run_manual_edit`
-- `stop_and_analyze`
-
-这意味着：
-
-- 还需要人工润色的候选，不会继续进入 formal merge assistant
-- 需要停下来分析的候选，也不会继续污染 patch / preview / report
-- 当没有 eligible 候选时，`apply-formal-merge --dry-run/--execute` 会明确提示当前无需推进 formal merge
-
-## Quality Signal Update
-
-当前候选质量检查链已经不只输出 `passed / warnings`，还会稳定输出三层机器信号：
-
-- `quality_level`
-- `review_recommendation`
-- `next_step`
-
-其中：
-
-- `quality_level` 用来表达候选本身质量状态：`good / weak / blocked`
-- `review_recommendation` 用来表达 review 阶段建议：`promote_now / edit_before_promote / hold_for_manual_analysis`
-- `next_step` 用来表达 promote 之后的推进方向：`continue_to_pending_merge / run_manual_edit / stop_and_analyze`
-
-这三层现在已经贯穿：
-
-- `candidate-quality-check`
-- `review-finish-candidates`
-- `promote-finish-candidates`
-- `plan-pending-merge`
-- `prepare-formal-merge`
-- `apply-formal-merge`
-
-因此当前 formal merge 链已经不是“只看有没有 warning”，而是会把候选质量、机器建议和下一步动作一起保留下来。
-## Quality Score Semantics
-
-The candidate quality pipeline now carries a lightweight `quality_score` in addition to `quality_level`.
-
-- `quality_score` is a heuristic score in the `0-100` range.
-- It is meant for ranking, triage, and quick comparison between candidates.
-- It does not replace `quality_level`, `review_recommendation`, or `next_step`; it complements them.
-
-Recommended interpretation:
-- `90-100`: strong candidate, usually consistent with `good`
-- `60-89`: usable but needs attention, often consistent with `weak`
-- `0-59`: poor or incomplete candidate, often consistent with `blocked`
-
-The current merge chain now preserves all four quality signals together:
-- `quality_score`
-- `quality_level`
-- `review_recommendation`
-- `next_step`
-## Top Review Summary
-
-`merge_plan.md` and `formal_merge_assistant.md` now expose a short `Top Candidates To Review First` section.
-
-Why it exists:
-- the merge chain can now surface both `eligible` and `deferred` candidates together
-- candidates are already ordered by `quality_score`
-- reviewers should be able to see the most worth-reviewing items without scanning the full list first
-
-Current behavior:
-- the summary mixes `eligible` and `deferred` candidates
-- each entry shows `quality_level`, `quality_score`, `review_recommendation`, and `next_step`
-- entries are sorted by `quality_score` descending
-- the section is a review shortcut only; it does not change the underlying gating rules
-## Review Priority Buckets
-
-The `Top Candidates To Review First` summary now exposes an extra review-focused priority label:
-- `review_now`
-- `watch`
-- `blocked`
-
-Current intent:
-- `review_now`: candidates already worth immediate reviewer attention, usually eligible items
-- `watch`: deferred items that are not fully blocked, but still worth keeping in view
-- `blocked`: items that should not move forward until manual analysis or stronger evidence is added
-
-These buckets are only review aids. They do not replace:
-- `quality_score`
-- `quality_level`
-- `review_recommendation`
-- `next_step`
-## Guidance Signals Across The Merge Chain
-
-The merge flow now preserves not only warning categories, but also short actionable guidance derived from them.
-
-Current progression is:
-- warning category
-- quality guidance
-- review recommendation
-- next step
-- merge-plan guidance
-
-This means reviewers can now see not only that a candidate is deferred, but also what kind of fix should happen first.
-## Deferred Grouping By Warning Category
-
-The merge planning flow now keeps two review views for deferred candidates:
-- score-first ordering
-- warning-category grouping
-
-This means reviewers can now:
-- inspect the highest-value deferred candidates first
-- or batch-fix one class of issue at a time, such as `missing_fields` or `weak_content`
-
-The grouped view is additive. It does not replace the ranked deferred list.
+```powershell
+spindle tools pre-push-check --include-offline --include-rag
+```

@@ -100,3 +100,10 @@
 2. 原因标签优先：`profile_schema_mismatch`、`pdo_ob_ib_mismatch`、`axis_mapping_mismatch`、`rpmsg_endpoint_stale`
 3. 建议动作优先：`query_dynamic_profile`、`compare_pdo_layout`、`run_fake_harness_regression`、`readonly_compare_before_write`
 4. 风险控制优先：严格拦截所有 `L2_high_risk_exec`
+
+## 7. 工程工具化补充标签
+
+1. 工具门禁动作：`run_pre_push_check`，用于 secret-scan、git diff check 和本地回归。
+2. 真实报告沉淀动作：`import_real_report`，用于把真实 report 转成 LOG 草稿和 replay scenario 草稿。
+3. 硬件动作审计动作：`audit_hardware_action`，用于区分 `offline_ok`、`board_required`、`robot_motion_required`、`io_required`、`firmware_required`。
+4. 工程化材料草稿动作：`draft_project_fact`，用于新增事实进入 reviewable draft，不直接污染 canonical 数据。

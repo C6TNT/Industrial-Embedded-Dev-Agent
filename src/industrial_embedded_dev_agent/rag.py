@@ -195,6 +195,16 @@ def _build_direct_answer(question: str, diagnosis, citations: list[Citation]) ->
         return "动态 runtime 完全接管旧 memcpy 前要先做只读对照，让两条链路只并行读、不并行写，确认六轴位置、状态字、错误码和关键运行态持续一致。"
     if "v1" in normalized_question and "自动控制" in question:
         return "V1 更适合先做研发副驾，聚焦低风险的 profile 检查、日志分析、离线回归和只读对照，同时明确禁止高风险自动执行。"
+    if "pre-push" in normalized_question or "上仓前" in question or "发布到 github" in normalized_question:
+        return "pre-push-check 应包含 secret-scan、git diff --check 和本地回归；如果开启扩展检查，还应覆盖 offline stub、RAG/tool safety benchmark，只有全部通过才进入推送。"
+    if "新增项目事实" in question or "draft-fact" in normalized_question:
+        return "新增项目事实先走 draft-fact 草稿流程，生成 fact_draft、benchmark_candidate 和 update_checklist，经人工审查后再更新 material_index、正式材料、chunks 和 benchmark。"
+    if "import-report" in normalized_question or "真实 report" in question or "replay scenario" in normalized_question:
+        return "真实 report importer 会提取 axis、slave、ob/ib、status_word、error_code、actual_position 和 pass/fail，生成 LOG 草稿、replay_scenario_draft 和 report_import_summary。"
+    if "hardware_scope" in normalized_question or "offline_ok" in normalized_question:
+        return "工具层 hardware_scope 分为 offline_ok、board_required、robot_motion_required、io_required、firmware_required；只有 offline_ok 可自动执行，其余都需要硬件窗口和人工确认。"
+    if "gsd" in normalized_question and ("边界" in question or "自动" in question or "autonomous" in normalized_question):
+        return "GSD 在本项目里只允许自动推进 offline_ok 工程任务，例如代码、测试、benchmark、RAG、fake harness、文档和 CI；真实板卡、机器人、IO、固件动作只能生成计划或审计，不能自动执行。"
 
     if diagnosis.should_refuse:
         return diagnosis.summary
@@ -256,6 +266,16 @@ def _expand_query(question: str) -> str:
         expansions.append("0x41F1 gate_locked 输出门控 动态控制写入 拦截")
     if "ddr" in normalized_question and "tcm" in normalized_question:
         expansions.append("DOC-002 DOC-003 TCM 空间不足 代码溢出 DDR")
+    if "pre-push" in normalized_question or "上仓前" in question or "发布到 github" in normalized_question:
+        expansions.append("secret-scan pre-push-check git diff check local regression GitHub CI CUR-009")
+    if "新增项目事实" in question or "draft-fact" in normalized_question:
+        expansions.append("draft-fact fact_draft benchmark_candidate update_checklist material_index chunks benchmark CUR-009")
+    if "import-report" in normalized_question or "真实 report" in question or "replay scenario" in normalized_question:
+        expansions.append("import-report real report LOG draft replay_scenario_draft report_import_summary CUR-009")
+    if "hardware_scope" in normalized_question or "offline_ok" in normalized_question:
+        expansions.append("hardware_scope offline_ok board_required robot_motion_required io_required firmware_required audit-hardware-action CUR-009")
+    if "gsd" in normalized_question:
+        expansions.append("GSD autonomous offline_ok GSD_BOUNDARY blocked commands 0x86 0x41F1 robot motion IO output remoteproc CUR-010")
 
     return " ".join(expansions)
 
@@ -335,6 +355,36 @@ def _query_intent_boost(hit: SearchHit, question: str) -> int:
             boost += 8
         if "labels_v1" in source_id.lower() or "标签体系" in hit.title:
             boost += 6
+
+    if any(token in normalized_question for token in ["pre-push", "secret-scan"]) or "上仓前" in question or "发布到 github" in normalized_question:
+        if source_id.startswith(("CUR-009", "CUR-008")):
+            boost += 16
+        if "secret-scan" in text or "pre-push-check" in text:
+            boost += 8
+
+    if "draft-fact" in normalized_question or "新增项目事实" in question:
+        if source_id.startswith(("CUR-009", "CUR-008")):
+            boost += 16
+        if "fact_draft" in text or "benchmark_candidate" in text:
+            boost += 8
+
+    if "import-report" in normalized_question or "真实 report" in question or "replay scenario" in normalized_question:
+        if source_id.startswith(("CUR-009", "CUR-004", "CUR-008")):
+            boost += 16
+        if "replay_scenario_draft" in text or "report_import_summary" in text:
+            boost += 8
+
+    if "hardware_scope" in normalized_question or "offline_ok" in normalized_question:
+        if source_id.startswith(("CUR-009", "CUR-008")):
+            boost += 16
+        if "robot_motion_required" in text or "firmware_required" in text:
+            boost += 8
+
+    if "gsd" in normalized_question:
+        if source_id.startswith(("CUR-010", "CUR-009")):
+            boost += 20
+        if "gsd automation boundary" in text or "blocked autonomous scope" in text:
+            boost += 10
 
     return boost
 

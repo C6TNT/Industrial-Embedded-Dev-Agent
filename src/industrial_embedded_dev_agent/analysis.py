@@ -8,6 +8,30 @@ from .models import StructuredDiagnosis
 LOG_RULES = [
     {
         "issue_category": "verification_tooling",
+        "keywords": ["secret_scan", "secret-scan", "pre-push", "pre_push", "sensitive_filename_hits", "content_secret_hits"],
+        "cause_labels": ["verification_gap"],
+        "action_labels": ["run_pre_push_check"],
+        "risk_level": "L0_readonly",
+        "summary": "当前指向发布前工程门禁，应先运行 secret-scan、git diff check 和本地回归，确认没有敏感信息或回归失败再推送。",
+    },
+    {
+        "issue_category": "verification_tooling",
+        "keywords": ["import-report", "import_real_report", "replay_scenario_draft", "log_entry_draft", "real report"],
+        "cause_labels": ["verification_gap"],
+        "action_labels": ["import_real_report"],
+        "risk_level": "L0_readonly",
+        "summary": "当前指向真实 report 沉淀流程，应先生成 LOG 草稿和 replay scenario 草稿，审查后再并入正式材料。",
+    },
+    {
+        "issue_category": "safety",
+        "keywords": ["hardware_scope", "offline_ok", "board_required", "robot_motion_required", "io_required", "firmware_required"],
+        "cause_labels": ["verification_gap"],
+        "action_labels": ["audit_hardware_action"],
+        "risk_level": "L0_readonly",
+        "summary": "当前指向工具硬件边界审计，应按 offline_ok、board_required、robot_motion_required、io_required、firmware_required 区分执行权限。",
+    },
+    {
+        "issue_category": "verification_tooling",
         "keywords": ["fake harness", "pytest", "replay", "xml batch", "离线", "scenario", "report.json"],
         "cause_labels": ["verification_gap"],
         "action_labels": ["run_fake_harness_regression"],
@@ -102,13 +126,29 @@ SAFETY_HIGH_RISK = [
     "stop-bus",
     "热重载",
     "remoteproc",
+    "motion",
+    "move",
+    "enable",
+    "unlock",
+    "write output",
+    "io output",
+    "firmware",
+    "flash",
+    "homing",
+    "limit switch",
 ]
 
 SAFETY_REQUEST_HINTS = [
     "帮我",
     "直接",
+    "自动",
     "先别管审批",
     "不用确认",
+    "不需要确认",
+    "解锁",
+    "跑一下",
+    "now",
+    "immediately",
     "运行",
     "下发",
     "改掉",
@@ -199,9 +239,11 @@ def _analyze_safety(text: str, normalized: str) -> StructuredDiagnosis:
             summary = "高风险请求，涉及 0x41F1 输出门控解锁，默认禁止自动执行，并且需要人工确认。"
         elif "0x86" in normalized or "控制字" in text or "使能" in text:
             summary = "高风险请求，涉及 0x86/控制字/使能动作，默认禁止自动执行，并且需要人工确认。"
-        elif "运动" in text:
+        elif "运动" in text or "motion" in normalized or "move" in normalized:
             summary = "高风险请求，涉及机器人运动，默认禁止自动执行，并且需要人工确认。"
-        elif "固件" in text or "刷" in text or "remoteproc" in normalized:
+        elif "写输出" in text or "io output" in normalized:
+            summary = "高风险请求，涉及 IO 或现场输出写入，默认禁止自动执行，并且需要人工确认。"
+        elif "固件" in text or "刷" in text or "remoteproc" in normalized or "firmware" in normalized or "flash" in normalized:
             summary = "高风险请求，涉及刷固件，默认禁止自动执行，并且需要人工确认。"
         return StructuredDiagnosis(
             summary=summary,

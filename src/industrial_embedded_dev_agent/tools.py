@@ -83,7 +83,13 @@ def build_tool_registry(root: Path) -> list[ToolSpec]:
 
 
 def list_tools(root: Path) -> list[dict[str, object]]:
-    return [asdict(tool) for tool in build_tool_registry(root)]
+    tools: list[dict[str, object]] = []
+    for tool in build_tool_registry(root):
+        payload = asdict(tool)
+        payload["hardware_scope"] = _tool_hardware_scope(tool)
+        payload["requires_hardware_window"] = payload["hardware_scope"] != "offline_ok"
+        tools.append(payload)
+    return tools
 
 
 def list_stub_scenarios() -> list[dict[str, str]]:
@@ -137,6 +143,13 @@ def current_project_baseline(root: Path) -> dict[str, object]:
             "0x86 control word, 0x41F1 unlock, robot motion, IO output",
             "new real report capture from robot or IO hardware",
         ],
+        "tool_hardware_scopes": {
+            "offline_ok": ["documentation", "RAG", "benchmark", "fake harness/replay", "secret scan", "board diagnostic dry-run"],
+            "board_required": ["board diagnostic --execute", "real query/start/stop"],
+            "robot_motion_required": ["axis motion probes"],
+            "io_required": ["IO/welding/limit output"],
+            "firmware_required": ["M7 image deploy", "remoteproc validation"],
+        },
         "canonical_files": {
             "material_index": str(material_root / "material_index_v1.md"),
             "current_baseline": str(material_root / "current_ethercat_dynamic_profile_project_v1.md"),
@@ -1811,17 +1824,18 @@ def _tool_plan_reason(
     normalized = request.lower()
     current_mode = _resolve_execution_mode(root)
     mode_note = f" Current execution mode: {current_mode}."
+    scope_note = f" Hardware scope: {_tool_hardware_scope(tool)}."
 
     if tool.tool_id == "SCRIPT-004" and any(token in request for token in READONLY_TOKENS):
-        return "Matched SCRIPT-004 because this is a read-only collection request for statusword / error code / actual_position." + mode_note
+        return "Matched SCRIPT-004 because this is a read-only collection request for statusword / error code / actual_position." + mode_note + scope_note
     if tool.tool_id == "SCRIPT-004" and (
         any(token in normalized for token in ["heartbeat", "snapshot"]) or any(token in request for token in SNAPSHOT_TOKENS)
     ):
-        return "Matched SCRIPT-004 because it is the low-risk snapshot tool for profile query, replay, and axis-state collection." + mode_note
+        return "Matched SCRIPT-004 because it is the low-risk snapshot tool for profile query, replay, and axis-state collection." + mode_note + scope_note
     if allowed_to_execute:
-        return f"Matched {tool.tool_id} because it stays within the {effective_risk} boundary and fits the current request." + mode_note
+        return f"Matched {tool.tool_id} because it stays within the {effective_risk} boundary and fits the current request." + mode_note + scope_note
     if requires_confirmation:
-        return f"{tool.tool_id} matches the request, but it is classified as {effective_risk} and stays blocked pending manual confirmation." + mode_note
+        return f"{tool.tool_id} matches the request, but it is classified as {effective_risk} and stays blocked pending manual confirmation." + mode_note + scope_note
     if not Path(tool.source_script).exists():
         return f"{tool.tool_id} matches the request, but the backing script path is missing."
     return f"{tool.tool_id} matches the request, but current policy keeps it blocked." + mode_note
@@ -1834,6 +1848,18 @@ def _build_command_preview(tool: ToolSpec, *, root: Path) -> list[str]:
     if tool.executor == "python":
         return ["python", str(script_path), *tool.default_args]
     return [str(script_path), *tool.default_args]
+
+
+def _tool_hardware_scope(tool: ToolSpec) -> str:
+    if tool.tool_id == "SCRIPT-004":
+        return "offline_ok"
+    if "motion" in tool.tags or "axis" in tool.tags or "command" in tool.tags:
+        return "robot_motion_required"
+    if "firmware" in tool.tags or "remoteproc" in tool.tags:
+        return "firmware_required"
+    if "io" in tool.tags or "welding" in tool.tags:
+        return "io_required"
+    return "board_required"
 
 
 def _command_success(command: list[str]) -> bool:
@@ -1916,7 +1942,7 @@ def _effective_tool_risk(request: str, tool: ToolSpec) -> str:
 def _effective_tool_summary(request: str, diagnosis, tool: ToolSpec) -> str:
     normalized = request.lower()
     if tool.tool_id == "SCRIPT-004" and any(token in request for token in READONLY_TOKENS):
-        return "这是只读请求，可先读取状态字、错误码和编码器，确认当前链路是否可读。"
+        return "这是只读请求，可先读取状态字、错误码和 actual_position，确认当前链路是否可读。"
     if tool.tool_id == "SCRIPT-004" and (
         "heartbeat" in normalized or "snapshot" in normalized or any(token in request for token in SNAPSHOT_TOKENS)
     ):

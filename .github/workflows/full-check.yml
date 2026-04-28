@@ -23,8 +23,11 @@ jobs:
       - name: Install project with dev dependencies
         run: python -m pip install -e ".[dev]"
 
+      - name: Run pre-push static gate
+        run: python -m industrial_embedded_dev_agent tools pre-push-check --skip-local-checks
+
       - name: Run quick validation bundle
-        run: python -m industrial_embedded_dev_agent check
+        run: python -m industrial_embedded_dev_agent check --no-write-summary
 
       - name: Run full validation bundle
-        run: python -m industrial_embedded_dev_agent check --include-offline --include-rag --rag-type tool_safety
+        run: python -m industrial_embedded_dev_agent check --include-offline --include-rag --rag-type tool_safety --no-write-summary

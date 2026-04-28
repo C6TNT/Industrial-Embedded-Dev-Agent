@@ -1,4 +1,7 @@
 {
+  "project_name": "Spindle",
+  "material_workspace": "D:\\桌面\\test",
+  "strategy": "search_first_memory_curated_tools_wrapper",
   "mode": "yolo",
   "parallelization": true,
   "depth": "quick",
@@ -8,5 +11,32 @@
     "verifier": true,
     "auto_advance": true,
     "skip_discuss": false
+  },
+  "safety": {
+    "autonomous_scope": "offline_ok_only",
+    "hardware_actions": "plan_and_audit_only",
+    "board_diagnostics": "dry_run_autonomous_execute_requires_board_read_window",
+    "blocked_commands": [
+      "ssh",
+      "scp",
+      "reboot",
+      "start-bus",
+      "stop-bus",
+      "0x86",
+      "0x41F1",
+      "robot motion",
+      "IO output",
+      "remoteproc lifecycle",
+      "firmware flash",
+      "M7 hot reload"
+    ],
+    "required_gate_before_completion": [
+      "pytest",
+      "rules benchmark",
+      "tool safety benchmark",
+      "RAG tool_safety benchmark",
+      "secret-scan",
+      "pre-push-check"
+    ]
   }
 }

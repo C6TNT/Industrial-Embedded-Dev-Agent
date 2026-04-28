@@ -16,9 +16,38 @@ from .bench_pack_render import (
     summarize_bench_sessions,
 )
 from .benchmarks import filter_benchmark_items, load_benchmark_items, summarize_benchmark
+from .board_diagnostics import (
+    board_report,
+    board_status,
+    ethercat_query_readonly,
+    m7_health,
+    rpmsg_health,
+)
 from .chunking import build_chunks, load_chunk_documents, summarize_chunks
 from .config import get_project_paths
 from .datasets import build_dataset_overview
+from .engineering import (
+    audit_hardware_action,
+    draft_material_fact,
+    draft_project_fact,
+    gsd_status,
+    import_real_report,
+    project_status,
+    run_gsd_offline,
+    run_pre_push_check,
+    scan_secrets,
+    summarize_fake_regression,
+    write_regression_overview,
+)
+from .material_workspace import (
+    SEARCH_SCOPES,
+    build_material_inventory,
+    build_material_status,
+    plan_material_tool,
+    run_material_tool,
+    search_material_workspace,
+    summarize_material_tools,
+)
 from .rag import answer_with_rag
 from .retrieval import build_search_documents, search_documents
 from .runner import run_benchmark, run_local_checks_with_options
@@ -52,7 +81,7 @@ from .tools import (
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="ieda", description="Industrial Embedded Dev Agent MVP CLI")
+    parser = argparse.ArgumentParser(prog="spindle", description="Spindle industrial engineering agent CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("overview", help="Show a project dataset overview")
@@ -112,6 +141,7 @@ def _build_parser() -> argparse.ArgumentParser:
     check_parser = subparsers.add_parser("check", help="Run the local regression bundle: pytest, rules benchmark, and tool-safety benchmark")
     check_parser.add_argument("--include-rag", action="store_true", help="Also run the RAG benchmark as part of the local check bundle")
     check_parser.add_argument("--include-offline", action="store_true", help="Also validate the curated offline stub sample compare set")
+    check_parser.add_argument("--no-write-summary", action="store_true", help="Do not write a Markdown regression overview under reports/")
     check_parser.add_argument(
         "--rag-type",
         choices=["knowledge_qa", "log_attribution", "tool_safety"],
@@ -123,6 +153,79 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_subparsers.add_parser("list", help="List registered tool specs")
     tools_subparsers.add_parser("stub-scenarios", help="List the available no-hardware stub scenarios")
     tools_subparsers.add_parser("project-baseline", help="Show the active EtherCAT Dynamic Profile Agent baseline")
+    tools_subparsers.add_parser("gsd-status", help="Show guarded GSD automation readiness and safety boundaries")
+    tools_gsd_run_parser = tools_subparsers.add_parser("gsd-offline-run", help="Run the guarded offline GSD automation gate and write a report")
+    tools_gsd_run_parser.add_argument("--include-history", action="store_true", help="Also scan git history during the static gate")
+    tools_gsd_run_parser.add_argument("--no-write-report", action="store_true", help="Do not write reports/gsd_runs output")
+    tools_gsd_run_parser.add_argument("--no-update-state", action="store_true", help="Do not update .planning/STATE.md")
+    tools_project_status_parser = tools_subparsers.add_parser("project-status", help="Show project health, data shape, git state, and hardware boundaries")
+    tools_project_status_parser.add_argument("--run-checks", action="store_true", help="Also run the full local offline check bundle")
+    tools_board_status_parser = tools_subparsers.add_parser("board-status", help="Plan or run board-only read diagnostics for SSH and required files")
+    _add_board_args(tools_board_status_parser)
+    tools_rpmsg_health_parser = tools_subparsers.add_parser("rpmsg-health", help="Plan or run board-only read diagnostics for RPMsg device state")
+    _add_board_args(tools_rpmsg_health_parser)
+    tools_m7_health_parser = tools_subparsers.add_parser("m7-health", help="Plan or run board-only read diagnostics for M7 logs")
+    _add_board_args(tools_m7_health_parser)
+    tools_query_readonly_parser = tools_subparsers.add_parser("ethercat-query-readonly", help="Plan or run a read-only a53_send_ec_profile --query")
+    _add_board_args(tools_query_readonly_parser)
+    tools_board_report_parser = tools_subparsers.add_parser("board-report", help="Create a board-only diagnostic report; dry-run by default")
+    _add_board_args(tools_board_report_parser)
+    tools_board_report_parser.add_argument("--output-dir", help="Optional output directory for report JSON/Markdown")
+    tools_board_report_parser.add_argument("--no-write-report", action="store_true", help="Do not write report files")
+    tools_inventory_parser = tools_subparsers.add_parser("material-inventory", help="Build a search-first inventory of the external engineering material workspace")
+    tools_inventory_parser.add_argument("--material-root", help="Override the material workspace root")
+    tools_inventory_parser.add_argument("--include-files", action="store_true", help="Include a bounded file list in the output")
+    tools_inventory_parser.add_argument("--file-limit", type=int, default=200, help="Maximum files to include when --include-files is used")
+    tools_material_status_parser = tools_subparsers.add_parser("material-status", help="Show material workspace health, search shape, and tool boundary summary")
+    tools_material_status_parser.add_argument("--material-root", help="Override the material workspace root")
+    tools_search_parser = tools_subparsers.add_parser("material-search", help="Search raw files in the engineering material workspace")
+    tools_search_parser.add_argument("query", help="Literal text to search for")
+    tools_search_parser.add_argument("--scope", choices=sorted(SEARCH_SCOPES), default="all", help="Workspace slice to search")
+    tools_search_parser.add_argument("--limit", type=int, default=20, help="Maximum hits")
+    tools_search_parser.add_argument("--material-root", help="Override the material workspace root")
+    tools_search_parser.add_argument("--case-sensitive", action="store_true", help="Use case-sensitive matching")
+    tools_material_tools_parser = tools_subparsers.add_parser("material-tools", help="Classify existing material-workspace tools by safety scope")
+    tools_material_tools_parser.add_argument("--material-root", help="Override the material workspace root")
+    tools_material_tools_parser.add_argument(
+        "--risk",
+        choices=["offline_ok", "board_required", "robot_motion_required", "io_required", "firmware_required"],
+        help="Filter by risk scope",
+    )
+    tools_material_tool_plan_parser = tools_subparsers.add_parser("material-tool-plan", help="Plan whether one material-workspace tool may run autonomously")
+    tools_material_tool_plan_parser.add_argument("tool_path", help="Tool path relative to the material workspace")
+    tools_material_tool_plan_parser.add_argument("--material-root", help="Override the material workspace root")
+    tools_material_run_tool_parser = tools_subparsers.add_parser("material-run-tool", help="Execute one offline_ok material-workspace tool through the safety gate")
+    tools_material_run_tool_parser.add_argument("tool_path", help="Tool path relative to the material workspace")
+    tools_material_run_tool_parser.add_argument("--material-root", help="Override the material workspace root")
+    tools_material_run_tool_parser.add_argument("--timeout", type=int, default=30, help="Execution timeout in seconds")
+    tools_material_run_tool_parser.add_argument("tool_args", nargs=argparse.REMAINDER, help="Optional arguments passed to the offline tool")
+    tools_secret_scan_parser = tools_subparsers.add_parser("secret-scan", help="Scan current repository files for common secrets before publishing")
+    tools_secret_scan_parser.add_argument("--include-history", action="store_true", help="Also scan git history with git grep")
+    tools_pre_push_parser = tools_subparsers.add_parser("pre-push-check", help="Run secret scan, git diff check, and optional local regression before pushing")
+    tools_pre_push_parser.add_argument("--include-history", action="store_true", help="Also scan git history")
+    tools_pre_push_parser.add_argument("--skip-local-checks", action="store_true", help="Only run secret scan and git diff checks")
+    tools_pre_push_parser.add_argument("--include-offline", action="store_true", help="Include offline stub regression samples")
+    tools_pre_push_parser.add_argument("--include-rag", action="store_true", help="Include RAG benchmark in the local regression check")
+    tools_fact_parser = tools_subparsers.add_parser("draft-fact", help="Create a reviewable draft for a new project fact without touching canonical data")
+    tools_fact_parser.add_argument("text", help="New project fact or test result text")
+    tools_fact_parser.add_argument("--title", help="Optional short title")
+    tools_fact_parser.add_argument("--source", help="Optional source path or report name")
+    tools_fact_parser.add_argument("--category", help="Optional category override")
+    tools_fact_parser.add_argument("--output-dir", help="Optional output directory")
+    tools_material_fact_parser = tools_subparsers.add_parser("material-draft-fact", help="Create a source-checked curated memory draft from the material workspace")
+    tools_material_fact_parser.add_argument("text", help="New source-backed project fact")
+    tools_material_fact_parser.add_argument("--source", required=True, help="Source path relative to the material workspace")
+    tools_material_fact_parser.add_argument("--title", help="Optional short title")
+    tools_material_fact_parser.add_argument("--material-root", help="Override the material workspace root")
+    tools_material_fact_parser.add_argument("--output-dir", help="Optional output directory")
+    tools_import_report_parser = tools_subparsers.add_parser("import-report", help="Convert a real JSON report into LOG/replay draft files")
+    tools_import_report_parser.add_argument("report", help="Path to a JSON report")
+    tools_import_report_parser.add_argument("--output-dir", help="Optional output directory")
+    tools_fake_summary_parser = tools_subparsers.add_parser("summarize-fake-regression", help="Summarize fake harness regression JSON into reviewable material")
+    tools_fake_summary_parser.add_argument("input", help="Path to a regression JSON file or directory")
+    tools_fake_summary_parser.add_argument("--output-dir", help="Optional output directory")
+    tools_audit_parser = tools_subparsers.add_parser("audit-hardware-action", help="Explain hardware boundary and required conditions for a requested action")
+    tools_audit_parser.add_argument("request", help="Natural-language action request")
     tools_subparsers.add_parser("mode", help="Show the current WSL execution mode")
     tools_subparsers.add_parser("doctor", help="Inspect the local WSL execution environment")
     tools_prep_real_parser = tools_subparsers.add_parser("prep-real-bench", help="Generate a ready-to-fill real-bench prep pack with checklist and templates")
@@ -200,6 +303,14 @@ def _build_parser() -> argparse.ArgumentParser:
     tools_run_parser.add_argument("--execute", action="store_true", help="Actually execute the allowed tool")
     tools_run_parser.add_argument("--timeout", type=int, default=20, help="Execution timeout in seconds")
     return parser
+
+
+def _add_board_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--host", default="192.168.3.33", help="Board IP or host name")
+    parser.add_argument("--user", default="root", help="SSH user")
+    parser.add_argument("--port", type=int, default=22, help="SSH port")
+    parser.add_argument("--timeout", type=int, default=8, help="SSH/connect timeout in seconds")
+    parser.add_argument("--execute", action="store_true", help="Actually run the read-only board diagnostic command")
 
 
 def _print_json(payload: object) -> None:
@@ -307,14 +418,15 @@ def main() -> None:
             return
 
     if args.command == "check":
-        _print_json(
-            run_local_checks_with_options(
-                paths.root,
-                include_rag=args.include_rag,
-                rag_item_type=args.rag_type,
-                include_offline=args.include_offline,
-            )
+        check_payload = run_local_checks_with_options(
+            paths.root,
+            include_rag=args.include_rag,
+            rag_item_type=args.rag_type,
+            include_offline=args.include_offline,
         )
+        if not args.no_write_summary:
+            check_payload["regression_overview"] = write_regression_overview(paths.root, check_payload)
+        _print_json(check_payload)
         return
 
     if args.command == "tools":
@@ -326,6 +438,201 @@ def main() -> None:
             return
         if args.tools_command == "project-baseline":
             _print_json(current_project_baseline(paths.root))
+            return
+        if args.tools_command == "gsd-status":
+            _print_json(gsd_status(paths.root))
+            return
+        if args.tools_command == "gsd-offline-run":
+            _print_json(
+                run_gsd_offline(
+                    paths.root,
+                    include_history=args.include_history,
+                    write_report=not args.no_write_report,
+                    update_state=not args.no_update_state,
+                )
+            )
+            return
+        if args.tools_command == "project-status":
+            _print_json(project_status(paths.root, run_checks=args.run_checks))
+            return
+        if args.tools_command == "board-status":
+            _print_json(
+                board_status(
+                    host=args.host,
+                    user=args.user,
+                    port=args.port,
+                    execute=args.execute,
+                    timeout_seconds=args.timeout,
+                )
+            )
+            return
+        if args.tools_command == "rpmsg-health":
+            _print_json(
+                rpmsg_health(
+                    host=args.host,
+                    user=args.user,
+                    port=args.port,
+                    execute=args.execute,
+                    timeout_seconds=args.timeout,
+                )
+            )
+            return
+        if args.tools_command == "m7-health":
+            _print_json(
+                m7_health(
+                    host=args.host,
+                    user=args.user,
+                    port=args.port,
+                    execute=args.execute,
+                    timeout_seconds=args.timeout,
+                )
+            )
+            return
+        if args.tools_command == "ethercat-query-readonly":
+            _print_json(
+                ethercat_query_readonly(
+                    host=args.host,
+                    user=args.user,
+                    port=args.port,
+                    execute=args.execute,
+                    timeout_seconds=args.timeout,
+                )
+            )
+            return
+        if args.tools_command == "board-report":
+            _print_json(
+                board_report(
+                    paths.root,
+                    host=args.host,
+                    user=args.user,
+                    port=args.port,
+                    execute=args.execute,
+                    timeout_seconds=args.timeout,
+                    output_dir=Path(args.output_dir) if args.output_dir else None,
+                    write_report=not args.no_write_report,
+                )
+            )
+            return
+        if args.tools_command == "material-inventory":
+            _print_json(
+                build_material_inventory(
+                    paths.root,
+                    material_root=Path(args.material_root) if args.material_root else None,
+                    include_files=args.include_files,
+                    file_limit=args.file_limit,
+                )
+            )
+            return
+        if args.tools_command == "material-status":
+            _print_json(
+                build_material_status(
+                    paths.root,
+                    material_root=Path(args.material_root) if args.material_root else None,
+                )
+            )
+            return
+        if args.tools_command == "material-search":
+            _print_json(
+                search_material_workspace(
+                    paths.root,
+                    args.query,
+                    scope=args.scope,
+                    limit=args.limit,
+                    material_root=Path(args.material_root) if args.material_root else None,
+                    case_sensitive=args.case_sensitive,
+                )
+            )
+            return
+        if args.tools_command == "material-tools":
+            _print_json(
+                summarize_material_tools(
+                    paths.root,
+                    material_root=Path(args.material_root) if args.material_root else None,
+                    risk=args.risk,
+                )
+            )
+            return
+        if args.tools_command == "material-tool-plan":
+            _print_json(
+                plan_material_tool(
+                    paths.root,
+                    args.tool_path,
+                    material_root=Path(args.material_root) if args.material_root else None,
+                )
+            )
+            return
+        if args.tools_command == "material-run-tool":
+            tool_args = list(args.tool_args)
+            if tool_args and tool_args[0] == "--":
+                tool_args = tool_args[1:]
+            _print_json(
+                run_material_tool(
+                    paths.root,
+                    args.tool_path,
+                    material_root=Path(args.material_root) if args.material_root else None,
+                    tool_args=tool_args,
+                    timeout_seconds=args.timeout,
+                )
+            )
+            return
+        if args.tools_command == "secret-scan":
+            _print_json(scan_secrets(paths.root, include_history=args.include_history))
+            return
+        if args.tools_command == "pre-push-check":
+            _print_json(
+                run_pre_push_check(
+                    paths.root,
+                    include_history=args.include_history,
+                    run_checks=not args.skip_local_checks,
+                    include_offline=args.include_offline,
+                    include_rag=args.include_rag,
+                )
+            )
+            return
+        if args.tools_command == "draft-fact":
+            _print_json(
+                draft_project_fact(
+                    paths.root,
+                    args.text,
+                    title=args.title,
+                    source=args.source,
+                    category=args.category,
+                    output_dir=Path(args.output_dir) if args.output_dir else None,
+                )
+            )
+            return
+        if args.tools_command == "material-draft-fact":
+            _print_json(
+                draft_material_fact(
+                    paths.root,
+                    args.text,
+                    source_path=args.source,
+                    title=args.title,
+                    material_root=Path(args.material_root) if args.material_root else None,
+                    output_dir=Path(args.output_dir) if args.output_dir else None,
+                )
+            )
+            return
+        if args.tools_command == "import-report":
+            _print_json(
+                import_real_report(
+                    paths.root,
+                    Path(args.report),
+                    output_dir=Path(args.output_dir) if args.output_dir else None,
+                )
+            )
+            return
+        if args.tools_command == "summarize-fake-regression":
+            _print_json(
+                summarize_fake_regression(
+                    paths.root,
+                    Path(args.input),
+                    output_dir=Path(args.output_dir) if args.output_dir else None,
+                )
+            )
+            return
+        if args.tools_command == "audit-hardware-action":
+            _print_json(audit_hardware_action(paths.root, args.request))
             return
         if args.tools_command == "mode":
             _print_json(get_execution_mode(paths.root))

@@ -70,6 +70,14 @@ output.map
 .ieda_stub_profile.json
 reports/bench_packs/
 reports/real_bench_prep/
+reports/project_fact_drafts/
+reports/report_imports/
+reports/fake_regression_summaries/
+reports/regression_overviews/
+reports/gsd_runs/
+reports/board_only/
+reports/security/
+reports/pre_push/
 
 # Nested repositories accidentally copied into the workspace
 **/.git/

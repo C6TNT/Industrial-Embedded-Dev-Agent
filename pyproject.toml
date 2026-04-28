@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "industrial-embedded-dev-agent"
+name = "spindle-agent"
 version = "0.1.0"
-description = "MVP skeleton for an industrial embedded development assistant."
+description = "Search-first industrial engineering agent wrapper for EtherCAT, robot, servo, and embedded debugging work."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -23,6 +23,7 @@ dev = [
 ]
 
 [project.scripts]
+spindle = "industrial_embedded_dev_agent.cli:main"
 ieda = "industrial_embedded_dev_agent.cli:main"
 
 [tool.setuptools]

@@ -23,6 +23,8 @@ TARGET_FILENAMES = {
     "labels_v1.md": "LABELS-V1",
     "current_ethercat_dynamic_profile_project_v1.md": "CUR-001",
     "current_ethercat_agent_development_guide.md": "CUR-008",
+    "roadmap.md": "CUR-009",
+    "GSD_BOUNDARY.md": "CUR-010",
 }
 
 SKIP_SEGMENTS = {

@@ -1,4 +1,4 @@
-"""Industrial Embedded Dev Agent MVP package."""
+"""Spindle industrial engineering agent package."""
 
 __all__ = ["__version__"]
 
