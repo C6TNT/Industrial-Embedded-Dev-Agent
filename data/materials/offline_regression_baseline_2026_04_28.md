@@ -7,7 +7,8 @@ EtherCAT fake harness improvements back into the real Huichuan runtime project.
 
 The work is `offline_ok`. It covers local Python tests, profile validation,
 fake EtherCAT harness regression, XML profile batch regression, replay batch
-regression, report format cleanup, and fixture refresh rules.
+regression, sanitized SOEM trace regression, report format cleanup, and fixture
+refresh rules.
 
 It does not approve or execute SSH, scp, reboot, remoteproc reload, real
 start-bus, real stop-bus, `0x86`, `0x41F1`, takeover, IO output, or robot
@@ -19,8 +20,9 @@ Project: `ethercat-fake-harness`
 
 Verified commands:
 
-- `python -m pytest tests -q`: 22 passed.
+- `python -m pytest tests -q`: 24 passed.
 - `python tools\fake_ecat_harness\run_offline_acceptance.py`: PASS.
+- `python tools\fake_ecat_harness\run_soem_trace_batch.py`: PASS.
 - `python tools\fake_ecat_harness\run_xml_profile_batch_regression.py`: PASS.
 - `python tools\fake_ecat_harness\run_replay_batch.py`: PASS.
 
@@ -32,7 +34,10 @@ Batch summary facts:
 - replay batch uses `schema_version=2`.
 - replay batch has `batch_type=real_report_replay`.
 - replay batch passed 15 cases and failed 0 cases.
-- offline acceptance passed 5/5 steps.
+- SOEM trace batch uses `schema_version=2`.
+- SOEM trace batch has `batch_type=soem_trace_profile_regression`.
+- SOEM trace batch passed 3 cases and failed 0 cases.
+- offline acceptance passed 6/6 steps.
 - fixture refresh dry-run planned 40 files and copied 0 files.
 - profile schema drift checked 5 documents and 10 profiles with 0 errors.
 
@@ -67,7 +72,7 @@ Batch summary facts:
 
 ## Batch Report Contract
 
-XML and replay batch summaries share these stable top-level fields:
+SOEM trace, XML, and replay batch summaries share these stable top-level fields:
 
 - `schema`
 - `schema_version`

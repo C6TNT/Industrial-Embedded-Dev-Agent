@@ -14,6 +14,7 @@ It covers:
 - local pytest;
 - fixture refresh dry-run;
 - profile schema drift checks;
+- sanitized SOEM trace to profile regression;
 - XML profile batch regression;
 - real-report replay batch regression;
 - generated JSON and Markdown acceptance summaries.
@@ -40,10 +41,11 @@ Source evidence:
 
 Latest accepted result:
 
-- offline acceptance: PASS, 5/5 steps;
-- pytest: 22 passed;
+- offline acceptance: PASS, 6/6 steps;
+- pytest: 24 passed;
 - fixture refresh dry-run: PASS, 40 planned, 0 copied;
 - profile schema drift: PASS, 5 documents, 10 profiles, 0 errors;
+- SOEM trace batch: PASS, 3/3 cases, 0 failed;
 - XML batch: PASS, 3/3 cases, 0 failed;
 - replay batch: PASS, 15/15 cases, 0 failed.
 
@@ -72,7 +74,8 @@ without copying or overwriting them.
 
 ## Report Contract
 
-The XML and replay batch reports keep the schema version 2 contract:
+The SOEM trace, XML, and replay batch reports keep the schema version 2
+contract:
 
 - `schema`
 - `schema_version`
@@ -103,9 +106,11 @@ The one-command acceptance summary uses:
 ## Agent Behavior Expected From This Evidence
 
 Spindle should answer that the current offline acceptance state is green for
-both the standalone fake harness and the Huichuan runtime mirror. It should also
-state that this evidence does not authorize board, bus, output gate, IO,
-firmware, or robot-motion actions.
+both the standalone fake harness and the Huichuan runtime mirror. For the
+standalone fake harness, it should mention that sanitized SOEM traces now enter
+the same offline evidence chain as XML and replay reports. It should also state
+that this evidence does not authorize board, bus, output gate, IO, firmware, or
+robot-motion actions.
 
 For hardware-adjacent work, the next safe step is only to draft a read-only run
 sheet. Executing that sheet requires explicit `board_required` approval.

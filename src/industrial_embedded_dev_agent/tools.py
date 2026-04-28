@@ -147,10 +147,11 @@ def current_project_baseline(root: Path) -> dict[str, object]:
         "offline_acceptance_baseline": {
             "date": "2026-04-28",
             "standalone_fake_harness": {
-                "acceptance": "PASS 5/5",
-                "pytest": "22 passed",
+                "acceptance": "PASS 6/6",
+                "pytest": "24 passed",
                 "fixture_refresh": "40 planned / 0 copied",
                 "schema_drift": "5 documents / 10 profiles / 0 errors",
+                "soem_trace_batch": "3/3 PASS",
                 "xml_batch": "3/3 PASS",
                 "replay_batch": "15/15 PASS",
             },

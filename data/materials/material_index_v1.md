@@ -123,3 +123,15 @@ CUR-015 through CUR-017 are sanitized summaries. They intentionally do not copy
 raw legacy source, build artifacts, `.git`, `.vscode`, deployment scripts, board
 addresses, credentials, raw logs, or vendor manuals into the public Agent
 project.
+
+## 10. SOEM Trace Regression
+
+| ID | Document | Type | Topic | Value |
+|---|---|---|---|---|
+| CUR-018 | `data/materials/soem_trace_regression_2026_04_28.md` | md | SOEM trace regression | Sanitized SOEM text evidence to profile candidate, validator, and fake replay |
+| SCRIPT-012 | `soem_trace_parser.py` | py | SOEM trace parser | Parses sanitized SOEM text into profile candidate evidence |
+| SCRIPT-013 | `run_soem_trace_batch.py` | py | SOEM trace batch | Runs trace parsing, profile validation, and fake replay for three sample drivers |
+
+CUR-018 records the `offline_ok` SOEM-adjacent evidence bridge. It is useful
+when answering how new driver adaptation can use SOEM logs without claiming that
+offline evidence authorizes live board, bus, IO, gate, or robot actions.

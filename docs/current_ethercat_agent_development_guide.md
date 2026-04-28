@@ -109,10 +109,12 @@ public-facing evidence is summarized in
 
 Standalone `ethercat-fake-harness` verification:
 
-- `python -m pytest tests -q`: 22 passed.
-- `python tools\fake_ecat_harness\run_offline_acceptance.py`: PASS, 5/5 steps.
+- `python -m pytest tests -q`: 24 passed.
+- `python tools\fake_ecat_harness\run_offline_acceptance.py`: PASS, 6/6 steps.
 - fixture refresh dry-run: 40 planned, 0 copied.
 - profile schema drift: 5 documents, 10 profiles, 0 errors.
+- SOEM trace regression: `schema_version=2`,
+  `batch_type=soem_trace_profile_regression`, 3 cases passed, 0 failed.
 - XML batch regression: `schema_version=2`, `batch_type=xml_profile_regression`,
   3 cases passed, 0 failed.
 - replay batch regression: `schema_version=2`, `batch_type=real_report_replay`,
@@ -143,8 +145,25 @@ The shared batch report contract now uses these stable fields:
 - `cases`
 
 Each case keeps legacy flat fields and also includes `inputs`, `artifacts`, and
-`steps`. This makes XML and replay reports easier to compare while preserving
-older consumers.
+`steps`. This makes SOEM trace, XML, and replay reports easier to compare while
+preserving older consumers.
+
+## 5.2 SOEM Trace Offline Bridge
+
+The SOEM trace path is an offline adapter-development bridge:
+
+```text
+sanitized SOEM trace -> profile candidate -> validate_ec_profile.py -> fake harness replay -> batch report
+```
+
+It is useful for new driver adaptation because it can turn SOEM or vendor-master
+evidence into reviewable profile candidates before any Huichuan runtime change.
+The trace parser counts PDO mapping SDOs as configuration evidence and keeps
+non-PDO SDO init writes such as `0x6060` in `extra_sdo`.
+
+This remains `offline_ok`. A live packet capture, live SOEM log, board query,
+IO output, gate unlock, or robot movement requires the normal hardware boundary
+classification before execution.
 
 Fixture refresh remains `offline_ok` only when it copies sanitized local
 fixtures and runs local validation. It must not SSH, scp, reboot, reload
