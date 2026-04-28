@@ -25,6 +25,7 @@ TARGET_FILENAMES = {
     "current_ethercat_agent_development_guide.md": "CUR-008",
     "roadmap.md": "CUR-009",
     "GSD_BOUNDARY.md": "CUR-010",
+    "offline_regression_baseline_2026_04_28.md": "CUR-011",
 }
 
 SKIP_SEGMENTS = {

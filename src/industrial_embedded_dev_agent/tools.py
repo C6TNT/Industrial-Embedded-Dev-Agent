@@ -28,6 +28,20 @@ STUB_SCENARIOS = {
 
 READONLY_TOKENS = ["状态字", "错误码", "编码器", "只读", "query", "profile", "拓扑", "actual_position"]
 SNAPSHOT_TOKENS = ["快照", "采集", "profile snapshot", "report", "fake", "replay"]
+BLOCKED_HARDWARE_TOKENS = [
+    "ssh",
+    "scp",
+    "reboot",
+    "remoteproc",
+    "start-bus",
+    "stop-bus",
+    "0x86",
+    "0x41f1",
+    "takeover",
+    "io output",
+    "move robot",
+    "robot motion",
+]
 
 
 def build_tool_registry(root: Path) -> list[ToolSpec]:
@@ -1657,6 +1671,30 @@ def render_bench_pack_markdown(
 
 
 def plan_tool_request(root: Path, request: str, *, tool_id: str | None = None) -> ToolPlan:
+    boundary_hits = _blocked_hardware_tokens(request)
+    if boundary_hits:
+        boundary_evidence = _blocked_boundary_evidence(boundary_hits)
+        return ToolPlan(
+            request=request,
+            summary=(
+                "高风险请求，需要人工确认。Request crosses the hardware boundary because it mentions "
+                f"{', '.join(boundary_hits)}; offline fake harness evidence does not approve board, bus, "
+                "output gate, IO, firmware, or robot actions."
+            ),
+            tool_id=None,
+            tool_name=None,
+            risk_level="L2_high_risk_exec",
+            allowed_to_execute=False,
+            requires_confirmation=True,
+            should_refuse=True,
+            command_preview=[],
+            reason=(
+                "Blocked before tool selection so low-risk fake harness keywords cannot override "
+                "start-bus, 0x41F1, robot, IO, firmware, SSH, scp, reboot, or remoteproc boundaries."
+            ),
+            evidence=boundary_evidence,
+        )
+
     diagnosis = analyze_text(request, mode="auto")
     registry = {tool.tool_id: tool for tool in build_tool_registry(root)}
     tool = registry.get(tool_id) if tool_id else _select_tool(request, diagnosis, registry)
@@ -1811,6 +1849,31 @@ def _select_tool(request: str, diagnosis, registry: dict[str, ToolSpec]) -> Tool
     if diagnosis.issue_category == "verification_tooling":
         return registry.get("SCRIPT-004")
     return None
+
+
+def _blocked_hardware_tokens(request: str) -> list[str]:
+    normalized = request.lower()
+    hits = [token for token in BLOCKED_HARDWARE_TOKENS if token in normalized]
+    if "move" in normalized and "robot" in normalized and "move robot" not in hits:
+        hits.append("move robot")
+    if "io" in normalized and "output" in normalized and "io output" not in hits:
+        hits.append("io output")
+    return hits
+
+
+def _blocked_boundary_evidence(boundary_hits: list[str]) -> list[str]:
+    evidence = [*boundary_hits, "高风险", "人工确认"]
+    if "0x86" in boundary_hits:
+        evidence.append("控制字")
+    if "0x41f1" in boundary_hits:
+        evidence.append("门控")
+    if "remoteproc" in boundary_hits:
+        evidence.append("刷固件")
+    if "start-bus" in boundary_hits or "stop-bus" in boundary_hits:
+        evidence.append("总线")
+    if "move robot" in boundary_hits or "robot motion" in boundary_hits:
+        evidence.append("机器人运动")
+    return evidence
 
 
 def _tool_plan_reason(

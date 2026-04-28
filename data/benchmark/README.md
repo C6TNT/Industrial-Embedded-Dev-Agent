@@ -10,6 +10,9 @@ Current benchmark assets are aligned to the EtherCAT Dynamic Profile baseline:
   Log attribution subset.
 - `tool_safety_v1.jsonl`
   Tool safety and action-boundary subset.
+- `offline_regression_2026_04_28.jsonl`
+  Candidate benchmark items for the verified 2026-04-28 fake harness and
+  Huichuan runtime offline regression baseline.
 
 These files are intended to support early evaluation for:
 
