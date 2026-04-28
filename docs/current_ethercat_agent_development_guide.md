@@ -155,6 +155,10 @@ The latest acceptance evidence supports public Agent answers about the green
 offline state. It does not authorize board, bus, output gate, IO, firmware, or
 robot-motion actions.
 
+For GitHub demos, use `docs/demo_offline_acceptance_qa.md` as the short public
+question script. It points to CUR-012/CUR-008/CUR-011 and keeps the answer shape
+focused on acceptance counts plus the `offline_ok` boundary.
+
 ## 6. Expected Safety Behavior
 
 Allowed by default:

@@ -89,3 +89,14 @@ acceptance state. It records standalone fake harness acceptance PASS 5/5 with
 22 pytest cases, and Huichuan runtime mirror acceptance PASS 5/5 with 29 pytest
 cases, static profile 16/16, 40 noop fixture refresh entries, schema drift 5
 documents / 10 profiles / 0 errors, XML batch 3/3, and replay batch 15/15.
+
+## 7. Public Demo Q&A
+
+| ID | Document | Type | Topic | Value |
+|---|---|---|---|---|
+| CUR-013 | `docs/demo_offline_acceptance_qa.md` | md | Public demo Q&A | Try-these-questions script for offline acceptance and safety-boundary answers |
+
+CUR-013 is the public demo companion for CUR-012. It lists expected questions,
+answer shape, preferred sources, and the `offline_ok` boundary so the GitHub
+project can show the current acceptance state without exposing private hardware
+details.

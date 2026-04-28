@@ -7,6 +7,16 @@
 - Public material source: `data/materials/offline_acceptance_evidence_2026_04_28.md`.
 - Boundary: this evidence is `offline_ok` only and does not approve board, bus, output gate, IO, firmware, or robot-motion actions.
 
+## Try These Demo Questions
+
+- What is the current 2026-04-28 offline acceptance status?
+- Which checks passed in the standalone fake harness?
+- Which checks passed in the Huichuan runtime mirror?
+- Does the latest offline acceptance evidence authorize board, bus, output gate, IO, firmware, or robot-motion actions?
+- What should change before a read-only board batch is allowed?
+
+See `docs/demo_offline_acceptance_qa.md` for the expected answer shape.
+
 Spindle 是一个面向工业嵌入式研发现场的工程 Agent 项目。名字取自主轴，强调它服务的核心场景：机器人、伺服、电机、运动控制、工业总线和真实调试链路。
 
 这个仓库当前围绕 `i.MX8MP A53 + RPMsg + M7 + EtherCAT Dynamic Profile / robot6 位置模式 / Fake Harness` 建立一套可落地的工程助手能力：资料检索、日志归因、工具安全边界、离线回归、报告沉淀和开发板只读诊断。

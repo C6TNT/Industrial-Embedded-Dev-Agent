@@ -27,6 +27,7 @@ TARGET_FILENAMES = {
     "GSD_BOUNDARY.md": "CUR-010",
     "offline_regression_baseline_2026_04_28.md": "CUR-011",
     "offline_acceptance_evidence_2026_04_28.md": "CUR-012",
+    "demo_offline_acceptance_qa.md": "CUR-013",
 }
 
 SKIP_SEGMENTS = {
