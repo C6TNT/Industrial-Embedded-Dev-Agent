@@ -28,6 +28,7 @@ TARGET_FILENAMES = {
     "offline_regression_baseline_2026_04_28.md": "CUR-011",
     "offline_acceptance_evidence_2026_04_28.md": "CUR-012",
     "demo_offline_acceptance_qa.md": "CUR-013",
+    "frozen_baseline_2026_04_28.md": "CUR-014",
 }
 
 SKIP_SEGMENTS = {

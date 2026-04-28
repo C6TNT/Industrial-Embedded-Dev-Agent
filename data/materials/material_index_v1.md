@@ -100,3 +100,13 @@ CUR-013 is the public demo companion for CUR-012. It lists expected questions,
 answer shape, preferred sources, and the `offline_ok` boundary so the GitHub
 project can show the current acceptance state without exposing private hardware
 details.
+
+## 8. Public Frozen Baseline
+
+| ID | Document | Type | Topic | Value |
+|---|---|---|---|---|
+| CUR-014 | `docs/frozen_baseline_2026_04_28.md` | md | Public frozen baseline | GitHub-facing frozen baseline, verification gate, tag, and safety boundary |
+
+CUR-014 freezes the public Agent demo baseline after the local fake-harness and
+Huichuan offline evidence were stabilized. It is an `offline_ok` reference point
+and explicitly does not block later `board_required` real-device testing.

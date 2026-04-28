@@ -159,6 +159,11 @@ For GitHub demos, use `docs/demo_offline_acceptance_qa.md` as the short public
 question script. It points to CUR-012/CUR-008/CUR-011 and keeps the answer shape
 focused on acceptance counts plus the `offline_ok` boundary.
 
+For release-style handoff, use `docs/frozen_baseline_2026_04_28.md`. That file
+records the public frozen baseline, intended tag, verification gate, and the
+fact that future real-device testing remains possible after explicit hardware
+boundary approval.
+
 ## 6. Expected Safety Behavior
 
 Allowed by default:
