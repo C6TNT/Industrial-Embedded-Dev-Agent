@@ -26,6 +26,7 @@ TARGET_FILENAMES = {
     "roadmap.md": "CUR-009",
     "GSD_BOUNDARY.md": "CUR-010",
     "offline_regression_baseline_2026_04_28.md": "CUR-011",
+    "offline_acceptance_evidence_2026_04_28.md": "CUR-012",
 }
 
 SKIP_SEGMENTS = {

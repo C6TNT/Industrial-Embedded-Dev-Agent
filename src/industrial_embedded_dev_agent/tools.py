@@ -144,6 +144,28 @@ def current_project_baseline(root: Path) -> dict[str, object]:
             "validated_motion_mode": "position mode",
             "validated_matrix": ["single-axis", "dual-axis", "triple-axis", "six-axis +200 dec"],
         },
+        "offline_acceptance_baseline": {
+            "date": "2026-04-28",
+            "standalone_fake_harness": {
+                "acceptance": "PASS 5/5",
+                "pytest": "22 passed",
+                "fixture_refresh": "40 planned / 0 copied",
+                "schema_drift": "5 documents / 10 profiles / 0 errors",
+                "xml_batch": "3/3 PASS",
+                "replay_batch": "15/15 PASS",
+            },
+            "huichuan_runtime_mirror": {
+                "static_profile": "16/16 PASS",
+                "acceptance": "PASS 5/5",
+                "pytest": "29 passed",
+                "fixture_refresh": "40 noop / 0 copied",
+                "schema_drift": "5 documents / 10 profiles / 0 errors",
+                "xml_batch": "3/3 PASS",
+                "replay_batch": "15/15 PASS",
+            },
+            "public_material": "data/materials/offline_acceptance_evidence_2026_04_28.md",
+            "boundary": "offline_ok evidence only; does not authorize board, bus, gate, IO, firmware, or robot-motion actions",
+        },
         "offline_agent_work": [
             "maintain material index and current baseline notes",
             "improve RAG direct answers and citation ranking",

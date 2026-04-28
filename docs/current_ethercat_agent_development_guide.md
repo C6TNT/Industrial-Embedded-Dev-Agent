@@ -100,14 +100,19 @@ For a fuller local gate:
 python -m industrial_embedded_dev_agent check --include-offline --include-rag --rag-type tool_safety
 ```
 
-## 5.1 2026-04-28 Offline Regression Baseline
+## 5.1 2026-04-28 Offline Acceptance Baseline
 
-The current offline baseline is split across the standalone fake harness and
-the real `huichuan-robot-runtime/mix_protocol` worktree.
+The current offline acceptance baseline is split across the standalone fake
+harness and the real `huichuan-robot-runtime/mix_protocol` worktree. The
+public-facing evidence is summarized in
+`data/materials/offline_acceptance_evidence_2026_04_28.md`.
 
 Standalone `ethercat-fake-harness` verification:
 
-- `python -m pytest tests -q`: 17 passed.
+- `python -m pytest tests -q`: 22 passed.
+- `python tools\fake_ecat_harness\run_offline_acceptance.py`: PASS, 5/5 steps.
+- fixture refresh dry-run: 40 planned, 0 copied.
+- profile schema drift: 5 documents, 10 profiles, 0 errors.
 - XML batch regression: `schema_version=2`, `batch_type=xml_profile_regression`,
   3 cases passed, 0 failed.
 - replay batch regression: `schema_version=2`, `batch_type=real_report_replay`,
@@ -116,8 +121,11 @@ Standalone `ethercat-fake-harness` verification:
 Real `huichuan-robot-runtime/mix_protocol` offline verification after syncing
 the fake harness report contract:
 
-- `python -m pytest tests -q`: 24 passed.
 - `python tools\run_static_profile_tests.py`: `RESULT PASS passed=16 total=16`.
+- `python tools\fake_ecat_harness\run_offline_acceptance.py`: PASS, 5/5 steps.
+- pytest inside acceptance: 29 passed.
+- fixture refresh dry-run inside acceptance: 40 noop, 0 copied.
+- profile schema drift: 5 documents, 10 profiles, 0 errors.
 - XML batch regression: `schema_version=2`, 3 cases passed, 0 failed.
 - replay batch regression: `schema_version=2`, 15 cases passed, 0 failed.
 
@@ -142,6 +150,10 @@ Fixture refresh remains `offline_ok` only when it copies sanitized local
 fixtures and runs local validation. It must not SSH, scp, reboot, reload
 remoteproc, start or stop the real bus, send `0x86`, unlock `0x41F1`, write IO,
 take over outputs, or move the robot.
+
+The latest acceptance evidence supports public Agent answers about the green
+offline state. It does not authorize board, bus, output gate, IO, firmware, or
+robot-motion actions.
 
 ## 6. Expected Safety Behavior
 

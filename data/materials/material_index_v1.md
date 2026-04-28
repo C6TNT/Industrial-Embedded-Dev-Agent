@@ -75,3 +75,17 @@
 2. 新增 XML/ESI 样本时，必须补 XML batch regression 和 fake harness scenario。
 3. 新增 IO/焊接节点时，先补只读 profile 描述，再补 dry-run 对照，最后等设备窗口做真实输出验证。
 4. 新增高风险动作样本时，优先补 `tool_safety` benchmark，确保 Agent 默认不会自动执行。
+
+## 6. 2026-04-28 Public Offline Acceptance Evidence
+
+| ID | Document | Type | Topic | Value |
+|---|---|---|---|---|
+| CUR-011 | `data/materials/offline_regression_baseline_2026_04_28.md` | md | Offline regression baseline | Fake harness and Huichuan regression counts |
+| CUR-012 | `data/materials/offline_acceptance_evidence_2026_04_28.md` | md | Offline acceptance evidence | Public latest acceptance status and hardware boundary |
+| SCRIPT-011 | `run_offline_acceptance.py` | py | One-command offline acceptance | Runs pytest, fixture dry-run, schema drift, XML batch, and replay batch |
+
+CUR-012 is the preferred public-facing source for the latest green offline
+acceptance state. It records standalone fake harness acceptance PASS 5/5 with
+22 pytest cases, and Huichuan runtime mirror acceptance PASS 5/5 with 29 pytest
+cases, static profile 16/16, 40 noop fixture refresh entries, schema drift 5
+documents / 10 profiles / 0 errors, XML batch 3/3, and replay batch 15/15.

@@ -19,7 +19,8 @@ Project: `ethercat-fake-harness`
 
 Verified commands:
 
-- `python -m pytest tests -q`: 17 passed.
+- `python -m pytest tests -q`: 22 passed.
+- `python tools\fake_ecat_harness\run_offline_acceptance.py`: PASS.
 - `python tools\fake_ecat_harness\run_xml_profile_batch_regression.py`: PASS.
 - `python tools\fake_ecat_harness\run_replay_batch.py`: PASS.
 
@@ -31,6 +32,9 @@ Batch summary facts:
 - replay batch uses `schema_version=2`.
 - replay batch has `batch_type=real_report_replay`.
 - replay batch passed 15 cases and failed 0 cases.
+- offline acceptance passed 5/5 steps.
+- fixture refresh dry-run planned 40 files and copied 0 files.
+- profile schema drift checked 5 documents and 10 profiles with 0 errors.
 
 ## Real Huichuan Runtime Offline Sync
 
@@ -46,8 +50,9 @@ Synced items:
 
 Verified commands:
 
-- `python -m pytest tests -q`: 24 passed.
 - `python tools\run_static_profile_tests.py`: `RESULT PASS passed=16 total=16`.
+- `python tools\fake_ecat_harness\run_offline_acceptance.py`: PASS.
+- pytest inside acceptance: 29 passed.
 - `python tools\fake_ecat_harness\run_xml_profile_batch_regression.py`: PASS.
 - `python tools\fake_ecat_harness\run_replay_batch.py`: PASS.
 
@@ -56,6 +61,9 @@ Batch summary facts:
 - XML batch uses `schema_version=2` and passed 3/3 cases.
 - replay batch uses `schema_version=2` and passed 15/15 cases.
 - Both summaries reported `totals.failed=0`.
+- offline acceptance passed 5/5 steps.
+- fixture refresh dry-run reported 40 noop and copied 0 files.
+- profile schema drift checked 5 documents and 10 profiles with 0 errors.
 
 ## Batch Report Contract
 

@@ -1,5 +1,12 @@
 # Spindle
 
+## Public Offline Acceptance Snapshot
+
+- Standalone fake harness: acceptance PASS `5/5`, pytest `22 passed`, fixture dry-run `40 planned / 0 copied`, schema drift `5 docs / 10 profiles / 0 errors`, XML batch `3/3 PASS`, replay batch `15/15 PASS`.
+- Huichuan runtime mirror: static profile `16/16 PASS`, acceptance PASS `5/5`, pytest inside acceptance `29 passed`, fixture dry-run `40 noop / 0 copied`, schema drift `5 docs / 10 profiles / 0 errors`, XML batch `3/3 PASS`, replay batch `15/15 PASS`.
+- Public material source: `data/materials/offline_acceptance_evidence_2026_04_28.md`.
+- Boundary: this evidence is `offline_ok` only and does not approve board, bus, output gate, IO, firmware, or robot-motion actions.
+
 Spindle 是一个面向工业嵌入式研发现场的工程 Agent 项目。名字取自主轴，强调它服务的核心场景：机器人、伺服、电机、运动控制、工业总线和真实调试链路。
 
 这个仓库当前围绕 `i.MX8MP A53 + RPMsg + M7 + EtherCAT Dynamic Profile / robot6 位置模式 / Fake Harness` 建立一套可落地的工程助手能力：资料检索、日志归因、工具安全边界、离线回归、报告沉淀和开发板只读诊断。

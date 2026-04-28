@@ -185,6 +185,17 @@ def _build_direct_answer(question: str, diagnosis, citations: list[Citation]) ->
         return "这是低风险状态采集请求，适合运行离线 fake harness replay batch，汇总 report 结果，不涉及真实硬件或在线控制。"
     if "fake harness" in normalized_question and ("回归结果" in question or "当前有哪些" in question):
         return "fake harness 当前正式回归结果为 fake matrix 14 个场景通过、XML batch 3 个真实 XML 样本通过、replay batch 15 个真实 report case 通过、pytest 9 个单元测试通过。"
+    if "offline acceptance" in normalized_question or "latest_offline_regression" in normalized_question or "current offline acceptance" in normalized_question:
+        return (
+            "The current 2026-04-28 offline acceptance state is green: "
+            "ethercat-fake-harness acceptance PASS 5/5 with 22 passed pytest cases, "
+            "40 planned / 0 copied fixture refresh, schema drift 5 documents / 10 profiles / 0 errors, "
+            "XML batch 3/3 PASS, and replay batch 15/15 PASS. "
+            "The huichuan-robot-runtime mirror has static profile 16/16 PASS, acceptance PASS 5/5, "
+            "29 passed pytest cases, 40 noop / 0 copied fixture refresh, schema drift 5 documents / 10 profiles / 0 errors, "
+            "XML batch 3/3 PASS, and replay batch 15/15 PASS. This evidence is offline_ok only and does not authorize "
+            "board, bus, output gate, IO, firmware, or robot-motion actions."
+        )
     if "fake harness" in normalized_question or "仿真" in question:
         return "Fake Harness 的定位是离线验证 XML/ESI 到 JSON profile、PDO 布局、状态机、query 结果和 report，不模拟真实机器人动力学，也不能替代真实上板验证。"
     if "remoteproc" in normalized_question or "热重载" in question:
@@ -260,6 +271,8 @@ def _expand_query(question: str) -> str:
         expansions.append("核间通信 共享内存 RPMsg-lite A53 M7 profile query start-bus stop-bus")
     if "fake harness" in normalized_question or "仿真" in question:
         expansions.append("EtherCAT Dynamic Profile Fake Harness XML profile scenario report replay pytest robot6 LOG-012 LOG-013 LOG-014 fake matrix 14 XML batch 3 replay batch 15")
+    if "offline acceptance" in normalized_question or "latest_offline_regression" in normalized_question or "current offline acceptance" in normalized_question:
+        expansions.append("CUR-012 offline acceptance evidence ethercat-fake-harness 22 passed acceptance 5/5 huichuan-runtime 29 passed static profile 16/16 schema drift XML batch 3/3 replay batch 15/15 offline_ok")
     if "0x4100" in normalized_question or "logical_axis" in normalized_question:
         expansions.append("动态参数区 0x4100 logical_axis runtime_axis parameter_set parameter_get")
     if "0x41f1" in normalized_question or "门控" in question:
@@ -315,6 +328,12 @@ def _query_intent_boost(hit: SearchHit, question: str) -> int:
             boost += 18
         if "replay" in text or "pytest" in text:
             boost += 4
+
+    if "offline acceptance" in normalized_question or "latest_offline_regression" in normalized_question or "current offline acceptance" in normalized_question:
+        if source_id.startswith(("CUR-011", "CUR-012", "CUR-008")):
+            boost += 24
+        if "offline acceptance evidence" in text or "acceptance pass" in text:
+            boost += 10
 
     if "0x4100" in normalized_question or "logical_axis" in normalized_question:
         if source_id.startswith("CUR-002") or source_id.startswith("LOG-"):
