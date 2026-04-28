@@ -110,3 +110,16 @@ details.
 CUR-014 freezes the public Agent demo baseline after the local fake-harness and
 Huichuan offline evidence were stabilized. It is an `offline_ok` reference point
 and explicitly does not block later `board_required` real-device testing.
+
+## 9. Sanitized Legacy Material Imports
+
+| ID | Document | Type | Topic | Value |
+|---|---|---|---|---|
+| CUR-015 | `data/materials/legacy_materials_ingestion_policy_2026_04_28.md` | md | Legacy ingestion policy | Public-safe rules for importing old documents and old engineering trees |
+| CUR-016 | `data/materials/legacy_canopen_rpmsg_lessons_2026_04_28.md` | md | Legacy CANopen/RPMsg lessons | A53/M7/RPMsg/FlexCAN/CANopen lessons distilled from the old dual-drive chain |
+| CUR-017 | `data/materials/ethercat_dynamic_profile_doc_timeline_2026_04_28.md` | md | Documentation timeline | Private-doc timeline from CANopen to EtherCAT Dynamic Profile, robot position mode, and fake harness |
+
+CUR-015 through CUR-017 are sanitized summaries. They intentionally do not copy
+raw legacy source, build artifacts, `.git`, `.vscode`, deployment scripts, board
+addresses, credentials, raw logs, or vendor manuals into the public Agent
+project.

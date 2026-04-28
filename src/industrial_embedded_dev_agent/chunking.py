@@ -29,6 +29,9 @@ TARGET_FILENAMES = {
     "offline_acceptance_evidence_2026_04_28.md": "CUR-012",
     "demo_offline_acceptance_qa.md": "CUR-013",
     "frozen_baseline_2026_04_28.md": "CUR-014",
+    "legacy_materials_ingestion_policy_2026_04_28.md": "CUR-015",
+    "legacy_canopen_rpmsg_lessons_2026_04_28.md": "CUR-016",
+    "ethercat_dynamic_profile_doc_timeline_2026_04_28.md": "CUR-017",
 }
 
 SKIP_SEGMENTS = {

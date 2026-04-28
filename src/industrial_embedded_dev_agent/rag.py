@@ -196,6 +196,34 @@ def _build_direct_answer(question: str, diagnosis, citations: list[Citation]) ->
             "XML batch 3/3 PASS, and replay batch 15/15 PASS. This evidence is offline_ok only and does not authorize "
             "board, bus, output gate, IO, firmware, or robot-motion actions."
         )
+    if (
+        ("legacy" in normalized_question or "imxsoem" in normalized_question or "canopen" in normalized_question)
+        and ("import" in normalized_question or "ingest" in normalized_question or "materials" in normalized_question)
+    ):
+        return (
+            "Legacy imxSoem/CANopen materials should enter Spindle as sanitized summaries, not raw source. "
+            "The import must exclude .git, .vscode, build artifacts, ELF, bin, object/map outputs, credentials, "
+            "board addresses, private logs, and hardware commands. The work is offline_ok only: preserve verified "
+            "lessons, interface notes, timelines, and benchmarkable conclusions without copying private execution details."
+        )
+    if (
+        ("canopen" in normalized_question or "flexcan" in normalized_question)
+        and ("legacy" in normalized_question or "rpmsg" in normalized_question or "dual" in normalized_question)
+    ):
+        return (
+            "Reusable legacy lessons: A53 owns orchestration while M7 owns real-time execution, RPMsg carries intent "
+            "between them, and FlexCAN/CANopen handled the historical dual-drive path. The stable CANopen shape used "
+            "RPDO1 for operation mode, controlword, and target speed, SDO for mode/status/speed/position feedback, "
+            "and the enable sequence 0x06 -> 0x07 -> 0x0F. COM3 and board deployment evidence are historical only; "
+            "executing that chain is board_required or higher and must not be auto-run."
+        )
+    if "document timeline" in normalized_question or "doc timeline" in normalized_question or "from canopen to ethercat" in normalized_question:
+        return (
+            "The private documentation timeline runs from CANopen dual-drive work into single-drive EtherCAT, then "
+            "dual/multi-drive adaptation, dynamic allocation, dynamic reconfiguration, robot single-axis validation, "
+            "robot position mode, and finally fake harness replay/profile validation. Spindle stores this as a "
+            "sanitized timeline, not as raw private manuals."
+        )
     if "fake harness" in normalized_question or "仿真" in question:
         return "Fake Harness 的定位是离线验证 XML/ESI 到 JSON profile、PDO 布局、状态机、query 结果和 report，不模拟真实机器人动力学，也不能替代真实上板验证。"
     if "remoteproc" in normalized_question or "热重载" in question:
@@ -269,6 +297,8 @@ def _expand_query(question: str) -> str:
         expansions.append("A53 XML ESI JSON profile RPMsg M7 EtherCAT PDO runtime_axis 0x4100")
     if "rpmsg" in normalized_question:
         expansions.append("核间通信 共享内存 RPMsg-lite A53 M7 profile query start-bus stop-bus")
+    if "legacy" in normalized_question or "imxsoem" in normalized_question or "canopen" in normalized_question:
+        expansions.append("CUR-015 CUR-016 CUR-017 legacy imxSoem CANopen RPMsg M7 A53 FlexCAN RPDO1 SDO sanitized summaries ingestion policy document timeline")
     if "fake harness" in normalized_question or "仿真" in question:
         expansions.append("EtherCAT Dynamic Profile Fake Harness XML profile scenario report replay pytest robot6 LOG-012 LOG-013 LOG-014 fake matrix 14 XML batch 3 replay batch 15")
     if "offline acceptance" in normalized_question or "latest_offline_regression" in normalized_question or "current offline acceptance" in normalized_question:
@@ -334,6 +364,12 @@ def _query_intent_boost(hit: SearchHit, question: str) -> int:
             boost += 24
         if "offline acceptance evidence" in text or "acceptance pass" in text:
             boost += 10
+
+    if "legacy" in normalized_question or "imxsoem" in normalized_question or "canopen" in normalized_question:
+        if source_id.startswith(("CUR-015", "CUR-016", "CUR-017")):
+            boost += 24
+        if "sanitized" in text or "canopen" in text or "rpmsg" in text or "document timeline" in text:
+            boost += 8
 
     if "0x4100" in normalized_question or "logical_axis" in normalized_question:
         if source_id.startswith("CUR-002") or source_id.startswith("LOG-"):
