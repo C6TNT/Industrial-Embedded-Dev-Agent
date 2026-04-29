@@ -85,10 +85,11 @@
 | SCRIPT-011 | `run_offline_acceptance.py` | py | One-command offline acceptance | Runs pytest, fixture dry-run, schema drift, XML batch, and replay batch |
 
 CUR-012 is the preferred public-facing source for the latest green offline
-acceptance state. It records standalone fake harness acceptance PASS 5/5 with
-22 pytest cases, and Huichuan runtime mirror acceptance PASS 5/5 with 29 pytest
-cases, static profile 16/16, 40 noop fixture refresh entries, schema drift 5
-documents / 10 profiles / 0 errors, XML batch 3/3, and replay batch 15/15.
+acceptance state. It records standalone fake harness acceptance PASS 6/6 with
+24 pytest cases, SOEM trace batch 3/3, and Huichuan runtime mirror acceptance
+PASS 5/5 with 29 pytest cases, static profile 16/16, 40 noop fixture refresh
+entries, schema drift 5 documents / 10 profiles / 0 errors, XML batch 3/3, and
+replay batch 15/15.
 
 ## 7. Public Demo Q&A
 
@@ -135,3 +136,14 @@ project.
 CUR-018 records the `offline_ok` SOEM-adjacent evidence bridge. It is useful
 when answering how new driver adaptation can use SOEM logs without claiming that
 offline evidence authorizes live board, bus, IO, gate, or robot actions.
+
+## 11. Test Double And Verification Layers
+
+| ID | Document | Type | Topic | Value |
+|---|---|---|---|---|
+| CUR-019 | `data/materials/test_double_verification_layers_2026_04_29.md` | md | Test double and verification layers | Public-safe fake/mock/stub definitions and the pre-real-test gate for new drivers or IO modules |
+
+CUR-019 defines stub, fake, and mock for this platform, then fixes the required
+gate before real Huichuan testing: sanitized trace/replay fixture, fake
+regression, Agent safety Q&A/tool gate, then approved `board_required` or
+`io_required` execution.

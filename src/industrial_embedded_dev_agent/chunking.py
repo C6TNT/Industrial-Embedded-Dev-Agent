@@ -33,6 +33,7 @@ TARGET_FILENAMES = {
     "legacy_canopen_rpmsg_lessons_2026_04_28.md": "CUR-016",
     "ethercat_dynamic_profile_doc_timeline_2026_04_28.md": "CUR-017",
     "soem_trace_regression_2026_04_28.md": "CUR-018",
+    "test_double_verification_layers_2026_04_29.md": "CUR-019",
 }
 
 SKIP_SEGMENTS = {

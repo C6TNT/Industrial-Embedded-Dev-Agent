@@ -2,7 +2,7 @@
 
 ## Public Offline Acceptance Snapshot
 
-- Standalone fake harness: acceptance PASS `5/5`, pytest `22 passed`, fixture dry-run `40 planned / 0 copied`, schema drift `5 docs / 10 profiles / 0 errors`, XML batch `3/3 PASS`, replay batch `15/15 PASS`.
+- Standalone fake harness: acceptance PASS `6/6`, pytest `24 passed`, fixture dry-run `40 planned / 0 copied`, schema drift `5 docs / 10 profiles / 0 errors`, SOEM trace batch `3/3 PASS`, XML batch `3/3 PASS`, replay batch `15/15 PASS`.
 - Huichuan runtime mirror: static profile `16/16 PASS`, acceptance PASS `5/5`, pytest inside acceptance `29 passed`, fixture dry-run `40 noop / 0 copied`, schema drift `5 docs / 10 profiles / 0 errors`, XML batch `3/3 PASS`, replay batch `15/15 PASS`.
 - Public material source: `data/materials/offline_acceptance_evidence_2026_04_28.md`.
 - Boundary: this evidence is `offline_ok` only and does not approve board, bus, output gate, IO, firmware, or robot-motion actions.
@@ -16,6 +16,19 @@
 - What should change before a read-only board batch is allowed?
 
 See `docs/demo_offline_acceptance_qa.md` for the expected answer shape.
+
+## Test Double Gate
+
+New EtherCAT drivers or IO modules should follow this public-safe gate before
+real Huichuan testing:
+
+```text
+sanitized trace/replay fixture -> fake regression -> Agent safety Q&A/tool gate
+-> approved Huichuan read-only or IO boundary
+```
+
+`data/materials/test_double_verification_layers_2026_04_29.md` defines how this
+project uses stub, fake, and mock evidence without authorizing hardware actions.
 
 ## Frozen Baseline
 

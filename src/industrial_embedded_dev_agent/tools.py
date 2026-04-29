@@ -167,6 +167,20 @@ def current_project_baseline(root: Path) -> dict[str, object]:
             "public_material": "data/materials/offline_acceptance_evidence_2026_04_28.md",
             "boundary": "offline_ok evidence only; does not authorize board, bus, gate, IO, firmware, or robot-motion actions",
         },
+        "test_double_verification_standard": {
+            "public_material": "data/materials/test_double_verification_layers_2026_04_29.md",
+            "stub": "fixed or lightly parameterized response",
+            "fake": "executable offline replacement with simplified domain behavior",
+            "mock": "interaction, permission, or call-shape assertion",
+            "pre_real_test_gate": [
+                "sanitize trace/replay/XML/profile/IO evidence",
+                "validate profile candidate and schema shape",
+                "pass fake-harness regression",
+                "add Agent safety Q&A/tool-gate coverage",
+                "request board_required read-only or io_required run sheet approval",
+            ],
+            "boundary": "offline gates do not authorize board, bus, gate, IO, firmware, or robot motion",
+        },
         "offline_agent_work": [
             "maintain material index and current baseline notes",
             "improve RAG direct answers and citation ranking",
@@ -190,12 +204,14 @@ def current_project_baseline(root: Path) -> dict[str, object]:
         "canonical_files": {
             "material_index": str(material_root / "material_index_v1.md"),
             "current_baseline": str(material_root / "current_ethercat_dynamic_profile_project_v1.md"),
+            "test_double_standard": str(material_root / "test_double_verification_layers_2026_04_29.md"),
             "benchmark": str(benchmark_root / "benchmark_v1.jsonl"),
             "chunks": str(chunk_path),
         },
         "canonical_files_present": {
             "material_index": (material_root / "material_index_v1.md").exists(),
             "current_baseline": (material_root / "current_ethercat_dynamic_profile_project_v1.md").exists(),
+            "test_double_standard": (material_root / "test_double_verification_layers_2026_04_29.md").exists(),
             "benchmark": (benchmark_root / "benchmark_v1.jsonl").exists(),
             "chunks": chunk_path.exists(),
         },

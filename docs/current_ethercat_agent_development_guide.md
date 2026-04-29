@@ -178,6 +178,34 @@ For GitHub demos, use `docs/demo_offline_acceptance_qa.md` as the short public
 question script. It points to CUR-012/CUR-008/CUR-011 and keeps the answer shape
 focused on acceptance counts plus the `offline_ok` boundary.
 
+## 5.3 Test Double And Verification Layers
+
+The platform now uses a shared test-double standard:
+
+- Stub: fixed or lightly parameterized response, such as query JSON, IO input
+  samples, or status snapshots.
+- Fake: executable offline replacement with simplified domain behavior, such as
+  `ethercat-fake-harness`, XML regression, SOEM trace regression, and replay
+  regression.
+- Mock: assertion about interaction, permission, or call shape, such as Agent
+  tool-safety checks that refuse `start-bus`, `0x41F1`, IO output, remoteproc
+  reload, or robot motion.
+
+New EtherCAT drivers or IO modules must pass this gate before real Huichuan
+testing is requested:
+
+```text
+sanitized trace/replay fixture
+  -> profile validation and schema checks
+  -> fake-harness regression
+  -> Agent safety Q&A/tool gate
+  -> approved board_required read-only or io_required run sheet
+```
+
+Passing the offline gate only means the candidate is ready to request a hardware
+window. It does not authorize board, bus, output gate, IO, firmware, or
+robot-motion actions.
+
 For release-style handoff, use `docs/frozen_baseline_2026_04_28.md`. That file
 records the public frozen baseline, intended tag, verification gate, and the
 fact that future real-device testing remains possible after explicit hardware

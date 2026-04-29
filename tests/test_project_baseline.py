@@ -19,4 +19,6 @@ def test_current_project_baseline_describes_ethercat_dynamic_profile() -> None:
     assert payload["offline_acceptance_baseline"]["standalone_fake_harness"]["pytest"] == "24 passed"
     assert payload["offline_acceptance_baseline"]["standalone_fake_harness"]["soem_trace_batch"] == "3/3 PASS"
     assert payload["offline_acceptance_baseline"]["huichuan_runtime_mirror"]["static_profile"] == "16/16 PASS"
+    assert payload["test_double_verification_standard"]["stub"].startswith("fixed")
+    assert "pass fake-harness regression" in payload["test_double_verification_standard"]["pre_real_test_gate"]
     assert all(payload["canonical_files_present"].values())
